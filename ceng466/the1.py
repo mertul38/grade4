@@ -58,11 +58,13 @@ class Interpolation:
     class INTERPOLATION_TYPE(enum.Enum):
         LINEAR = "linear"
         CUBIC = "cubic"
+
     class NEIGHBOUR_TYPE(enum.Enum):
         EXACT_POINT = "EXACT_POINT"
         X_DIM_POINT = "X_DIM_POINT"
         Y_DIM_POINT = "Y_DIM_POINT"
         TWO_DIM_POINT = "TWO_DIM_POINT"
+
     def __init__(self):
         pass
 
@@ -81,7 +83,10 @@ class Interpolation:
 
     def calculate_weighted_value(self, img, points, weights):
         final_value = 0
-        values = [img[point[0], point[1]] for point in points]
+
+        values = []
+        for point in points:
+            values.append(img[point[0], point[1]])
         for value, weight in zip(values, weights):
             final_value += value * weight
         return final_value
@@ -92,6 +97,7 @@ class Interpolation:
 class BilinearInterpolation(Interpolation):
     def __init__(self):
         super().__init__()
+
     # Bilinear Interpolation Specific Functions
     def get_linear_neighbours(self, point):
         points = []
@@ -160,45 +166,33 @@ class BilinearInterpolation(Interpolation):
 class CubicInterpolation(Interpolation):
     def __init__(self):
         super().__init__()
+
     # Cubic Interpolation Specific Functions
-    def bicubic_interpolation(self, image, x, y):
-        """Perform bicubic interpolation on a 2D image or 3D image (multi-channel)."""
-        if image.ndim == 2:  # Grayscale image
-            return self._bicubic_interpolation_single_channel(image, x, y)
-        elif image.ndim == 3:  # Multi-channel (RGB) image
-            channels = []
-            for channel in range(image.shape[2]):
-                channel_data = self._bicubic_interpolation_single_channel(image[:, :, channel], x, y)
-                channels.append(channel_data)
-            return np.stack(channels, axis=-1)
-        
-    def _bicubic_interpolation_single_channel(self, image, x, y):
-        """Bicubic interpolation for a single channel."""
-        x_floor = int(np.floor(x))
-        y_floor = int(np.floor(y))
+    def get_cubic_neighbours(self, point, h, w):
+        """Get neighbors for cubic interpolation. Uses a 4x4 grid and handles out-of-bounds cases."""
+        points = []
+        point_y_int = int(np.floor(point[0]))
+        point_x_int = int(np.floor(point[1]))
 
-        dx = x - x_floor
-        dy = y - y_floor
+        # Generate 4x4 neighboring points for cubic interpolation
+        for y in range(point_y_int - 1, point_y_int + 3):
+            for x in range(point_x_int - 1, point_x_int + 3):
+                # Ensure points are within bounds (handle out-of-bounds using replication)
+                y_clamped = min(max(y, 0), h - 1)
+                x_clamped = min(max(x, 0), w - 1)
+                points.append((y_clamped, x_clamped))
+        return points
 
-        result = 0.0
-        for j in range(-1, 3):  # Iterate over 4 neighboring rows
-            row_interpolation = 0.0
-            for i in range(-1, 3):  # Iterate over 4 neighboring columns
-                pixel_value = self.get_pixel(image, x_floor + i, y_floor + j)
-                row_interpolation += pixel_value * self.cubic_kernel(i - dx)
-            
-            result += row_interpolation * self.cubic_kernel(j - dy)
+    def calculate_cubic_weights(self, point, neighbour_points):
+        """Calculate weights for cubic interpolation."""
+        weights = []
 
-        return result
+        for neighbour in neighbour_points:
+            weight_x = self.cubic_kernel(neighbour[1] - point[1])
+            weight_y = self.cubic_kernel(neighbour[0] - point[0])
+            weights.append(weight_x * weight_y)
+        return weights
 
-    def get_pixel(self, image, x, y):
-        height, width = image.shape[:2]
-
-        x = max(0, min(width - 1, x))
-        y = max(0, min(height - 1, y))
-        
-        return image[int(y), int(x)]
-    
     def cubic_kernel(self, t):
         """Cubic convolution kernel for interpolation."""
         t = np.abs(t)
@@ -220,8 +214,11 @@ class CubicInterpolation(Interpolation):
             for i in range(scaled_w):
                 point = (j, i)
                 q = self.get_reverse_scaled_point(point, scale, h, w)
-                new_value = self.bicubic_interpolation(img, q[1], q[0])
-                scaled_img[j, i] = new_value
+                neighbour_points = self.get_cubic_neighbours(q, h, w)
+                weights = self.calculate_cubic_weights(q, neighbour_points)
+                placed_value = self.calculate_weighted_value(img, neighbour_points, weights)
+                scaled_img[point[0], point[1]] = np.round(placed_value)
+
         return scaled_img
 
 def read_image(filename, gray_scale = False):
