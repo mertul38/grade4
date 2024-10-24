@@ -58,15 +58,11 @@ class Interpolation:
     class INTERPOLATION_TYPE(enum.Enum):
         LINEAR = "linear"
         CUBIC = "cubic"
-
-    class BILINEAR_NEIGHBOUR_POINT_TYPE(enum.Enum):
-        EXACT_POINT = 1
-        ONE_DIM_POINT = 2
-        TWO_DIM_POINT = 3
-        
-    class CUBIC_NEIGHBOUR_POINT_TYPE(enum.Enum):
-        pass
-
+    class NEIGHBOUR_TYPE(enum.Enum):
+        EXACT_POINT = "EXACT_POINT"
+        X_DIM_POINT = "X_DIM_POINT"
+        Y_DIM_POINT = "Y_DIM_POINT"
+        TWO_DIM_POINT = "TWO_DIM_POINT"
     def __init__(self):
         pass
 
@@ -91,50 +87,49 @@ class Interpolation:
         return final_value
 
     # Bilinear Interpolation Specific Functions
-    def get_neighbour_points(self, point, h, w):
+    def get_linear_neighbours(self, point):
+        points = []
+        neighbour_type = None
+
         point_y_int = int(point[0])
         point_x_int = int(point[1])
         if point[0] == point_y_int and point[1] == point_x_int:
-            return ([point], self.BILINEAR_NEIGHBOUR_POINT_TYPE.EXACT_POINT)
+            neighbour_type = Interpolation.NEIGHBOUR_TYPE.EXACT_POINT
+            points.append(point)
         elif point[0] == point_y_int or point[1] == point_x_int:
             if point[0] == point_y_int:
-                Q1 = (point_y_int, point_x_int)
-                Q2 = (point_y_int, point_x_int + 1)
-                return ([Q1, Q2], self.BILINEAR_NEIGHBOUR_POINT_TYPE.ONE_DIM_POINT)
+                neighbour_type = Interpolation.NEIGHBOUR_TYPE.X_DIM_POINT
+                for x in range(point_x_int, point_x_int + 2):
+                    points.append((point_y_int, x))
             else:
-                Q1 = (point_y_int, point_x_int)
-                Q2 = (point_y_int + 1, point_x_int)
-                return ([Q1, Q2], self.BILINEAR_NEIGHBOUR_POINT_TYPE.ONE_DIM_POINT)
+                neighbour_type = Interpolation.NEIGHBOUR_TYPE.Y_DIM_POINT
+                for y in range(point_y_int, point_y_int + 2):
+                    points.append((y, point_x_int))
         else:
-            Q1 = (point_y_int, point_x_int)
-            Q2 = (point_y_int + 1, point_x_int + 1)
-            Q3 = (point_y_int, point_x_int + 1)
-            Q4 = (point_y_int + 1, point_x_int)
-            return ([Q1, Q2, Q3, Q4], self.BILINEAR_NEIGHBOUR_POINT_TYPE.TWO_DIM_POINT)
-
-    def find_bilinear_weights(self, point, neighbour_points, neighbour_type):
+            neighbour_type = Interpolation.NEIGHBOUR_TYPE.TWO_DIM_POINT
+            for y in range(point_y_int, point_y_int + 2):
+                for x in range(point_x_int, point_x_int + 2):
+                    points.append((y, x))
+        return (points, neighbour_type)
+    
+    def calculate_bilinear_weights(self, point, neighbour_points, neighbour_type):
         weights = []
-        if neighbour_type == self.BILINEAR_NEIGHBOUR_POINT_TYPE.EXACT_POINT:
+        if neighbour_type == Interpolation.NEIGHBOUR_TYPE.EXACT_POINT:
             weights = [1]
-        elif neighbour_type == self.BILINEAR_NEIGHBOUR_POINT_TYPE.ONE_DIM_POINT:
-            q1 = neighbour_points[0]
-            q2 = neighbour_points[1]
-            if q1[0] == q2[0]:
-                w1 = abs(q2[1] - point[1])
-                w2 = abs(q1[1] - point[1])
-                weights = [w1, w2]
-            else:
-                w1 = abs(q2[0] - point[0])
-                w2 = abs(q1[0] - point[0])
-                weights = [w1, w2]
-        elif neighbour_type == self.BILINEAR_NEIGHBOUR_POINT_TYPE.TWO_DIM_POINT:
-            q1, q2, q3, q4 = neighbour_points
-            w1 = abs(q2[0] - point[0]) * abs(q2[1] - point[1])
-            w2 = abs(q1[0] - point[0]) * abs(q1[1] - point[1])
-            w3 = abs(q4[0] - point[0]) * abs(q4[1] - point[1])
-            w4 = abs(q3[0] - point[0]) * abs(q3[1] - point[1])
-            weights = [w1, w2, w3, w4]
+        elif neighbour_type == Interpolation.NEIGHBOUR_TYPE.X_DIM_POINT or neighbour_type == Interpolation.NEIGHBOUR_TYPE.Y_DIM_POINT:
+            dim = None
+            if neighbour_type == Interpolation.NEIGHBOUR_TYPE.X_DIM_POINT:  # Horizontal interpolation
+                dim = 1
+            else:  # Vertical interpolation
+                dim = 0
 
+            for neighbour in neighbour_points:
+                w = 1 - abs(neighbour[dim] - point[dim])
+                weights.append(w)
+        elif neighbour_type == Interpolation.NEIGHBOUR_TYPE.TWO_DIM_POINT:
+            for neighbour in neighbour_points:
+                w = (1 - abs(neighbour[0] - point[0])) * (1 - abs(neighbour[1] - point[1]))
+                weights.append(w)
         return weights
 
     def bilinear_interpolation(self, img, scale):
@@ -149,14 +144,77 @@ class Interpolation:
             for j in range(new_w):
                 point = (i, j)
                 q = self.get_reverse_scaled_point(point, scale, h, w)
-                neighbour_points, neighbour_type = self.get_neighbour_points(q, h, w)
-                weights = self.find_bilinear_weights(q, neighbour_points, neighbour_type)
+                neighbour_points, neighbour_type = self.get_linear_neighbours(q)
+                weights = self.calculate_bilinear_weights(q, neighbour_points, neighbour_type)
                 placed_value = self.calculate_weighted_value(img, neighbour_points, weights)
                 scaled_img[i, j] = np.round(placed_value)
 
         return scaled_img
 
     # Cubic Interpolation Specific Functions
+    def get_cubic_neighbours(self, point, h, w):
+        points = []
+        neighbour_type = None
+
+        point_y_int = int(point[0])
+        point_x_int = int(point[1])
+        if point[0] == point_y_int and point[1] == point_x_int:
+            neighbour_type = Interpolation.NEIGHBOUR_TYPE.EXACT_POINT
+            points.append(point)
+        elif point[0] == point_y_int or point[1] == point_x_int:
+            if point[0] == point_y_int:
+                neighbour_type = Interpolation.NEIGHBOUR_TYPE.X_DIM_POINT
+                for x in range(point_x_int - 1, point_x_int + 3):
+                    points.append((point_y_int, x))
+            else:
+                neighbour_type = Interpolation.NEIGHBOUR_TYPE.Y_DIM_POINT
+                for y in range(point_y_int - 1, point_y_int + 3):
+                    points.append((y, point_x_int))
+        else:
+            neighbour_type = Interpolation.NEIGHBOUR_TYPE.TWO_DIM_POINT
+            for y in range(point_y_int - 1, point_y_int + 3):
+                for x in range(point_x_int - 1, point_x_int + 3):
+                    points.append((y, x))
+        return (points, neighbour_type)          
+        
+
+    def calculate_cubic_weights(self, point, neighbour_points, neighbour_type):
+        
+        weights = []
+        
+        if neighbour_type == Interpolation.NEIGHBOUR_TYPE.EXACT_POINT:
+            weights = [1]
+            
+        elif neighbour_type == Interpolation.NEIGHBOUR_TYPE.X_DIM_POINT or neighbour_type == Interpolation.NEIGHBOUR_TYPE.Y_DIM_POINT:
+            dim = None
+            if neighbour_type == Interpolation.NEIGHBOUR_TYPE.X_DIM_POINT:  # Horizontal interpolation
+                dim = 1
+            else:  # Vertical interpolation
+                dim = 0
+
+            for neighbour in neighbour_points:
+                print("neighbour")
+                print(neighbour)
+        else:
+            pass
+        return weights
+
+    def cubic_interpolation(self, img, scale):
+        h, w = img.shape[:2]
+        channels = 1 if len(img.shape) == 2 else img.shape[2]
+        new_h = int(h * scale)
+        new_w = int(w * scale)
+
+        scaled_img = np.zeros((new_h, new_w, channels), dtype=img.dtype)
+
+        for i in range(new_h):
+            for j in range(new_w):
+                point = (i, j)
+                q = self.get_reverse_scaled_point(point, scale, h, w)
+                neighbours = self.get_cubic_neighbours(q, h, w)
+                weights = self.calculate_cubic_weights(q, neighbours)
+
+        return scaled_img
 
     # General Interpolation Function
     def interpolate(self, img, scale, interpolation_type):

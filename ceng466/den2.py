@@ -1,26 +1,14 @@
-import cv2
+
+
+from the1 import Interpolation
 import numpy as np
 
-# Load the image from the path
-img = np.array([
-    [30, 40],
-    [10, 60]
-], dtype=np.uint8)
 
+interpolation = Interpolation()
 
-scale = 2
-# Resize the rotated image using bilinear interpolation (2x scaling)
-linear_scaled = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
+arr = np.array([
+    [1, 2],
+    [3, 4]
+])
 
-# Resize the rotated image using bicubic interpolation (2x scaling)
-cubic_scaled = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-
-print("Rotated")
-print(img)
-print("----------------")
-print("Scaled Image with Bilinear Interpolation")
-print(linear_scaled)
-print("----------------")
-print("Scaled Image with Bicubic Interpolation")
-print(cubic_scaled)
-
+interpolation.calculate_cubic_weights((0.6, 0), arr, Interpolation.NEIGHBOUR_TYPE.Y_DIM_POINT)
