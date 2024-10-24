@@ -3,6 +3,7 @@ import cv2
 import matplotlib.pyplot as  plt
 import enum
 import os
+from scipy.stats import entropy  # This is used for KL divergence
 
 input_folder = 'THE1_Images/'
 output_folder = 'THE1_Outputs/'
@@ -144,7 +145,7 @@ class BilinearInterpolation(Interpolation):
 
         return scaled_img
 
-class CubicInterpolation(Interpolation):
+class BicubicInterpolation(Interpolation):
     def __init__(self):
         super().__init__()
 
@@ -205,7 +206,7 @@ class CubicInterpolation(Interpolation):
 def read_image(filename, gray_scale = False):
     # CV2 is just a suggestion you can use other libraries as well
     if gray_scale:
-        img = cv2.imread(input_folder + filename, cv2.CV_LOAD_IMAGE_GRAYSCALE)    
+        img = cv2.imread(input_folder + filename, cv2.IMREAD_GRAYSCALE)    
         return img
     img = cv2.imread(input_folder + filename)
     return img
@@ -223,28 +224,70 @@ def rotate_upsample(img, scale, degree, interpolation_type):
     degree: shows the degree of rotation
     interp: either linear or cubic'''
     rotation = Rotation()
-    rotated_img = rotation.rotate_image(img, degree)
-    interpolation = Interpolation()
-    img = interpolation.interpolate(rotated_img, scale, interpolation_type)
+    rotated_img = rotation.rotate_image(img, -degree)
+    if interpolation_type == Interpolation.INTERPOLATION_TYPE.LINEAR:
+        interpolation = BilinearInterpolation()
+    elif interpolation_type == Interpolation.INTERPOLATION_TYPE.CUBIC:
+        interpolation = BicubicInterpolation()
+    img = interpolation.interpolate(rotated_img, scale)
     
     return img
 
-def compute_distance(img1, img2):
 
-    return distance
+def compute_histogram(image, bins=50):
+    """Compute the normalized histogram of the hue channel."""
+    # Convert image to HSI and extract the hue channel
+    hsi_img = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    hue_channel = hsi_img[:, :, 0]
+    
+    # Compute the histogram of the hue channel
+    hist = cv2.calcHist([hue_channel], [0], None, [bins], [0, 180])
+    # Normalize the histogram
+    hist = cv2.normalize(hist, hist).flatten()
+    return hist
+
+def compute_kl_divergence(hist1, hist2):
+    """Compute the KL Divergence between two histograms."""
+    # Add a small epsilon to avoid division by zero or log(0)
+    epsilon = 1e-10
+    hist1 = hist1 + epsilon
+    hist2 = hist2 + epsilon
+    return entropy(hist1, hist2)
 
 def desert_or_forest(img):
-    '''img: image to be classified as desert or forest
-    return a string: either 'desert'  or 'forest' 
+    """Classify the input image as 'desert' or 'forest'."""
     
-    You should compare the KL Divergence between histograms of hue channel. Please provide images and discuss these histograms in your report'''
+    # Load the database images
     desert1 = read_image('desert1.jpg')
     desert2 = read_image('desert2.jpg')
     forest1 = read_image('forest1.jpg')
     forest2 = read_image('forest2.jpg')
 
-    return result
+    # Compute histograms for the desert and forest images (Hue channel)
+    desert_hist1 = compute_histogram(desert1)
+    desert_hist2 = compute_histogram(desert2)
+    forest_hist1 = compute_histogram(forest1)
+    forest_hist2 = compute_histogram(forest2)
 
+    # Compute the histogram for the input image
+    input_hist = compute_histogram(img)
+
+    # Compute KL Divergences with desert and forest images
+    kl_desert1 = compute_kl_divergence(input_hist, desert_hist1)
+    kl_desert2 = compute_kl_divergence(input_hist, desert_hist2)
+    kl_forest1 = compute_kl_divergence(input_hist, forest_hist1)
+    kl_forest2 = compute_kl_divergence(input_hist, forest_hist2)
+
+    # Average the KL divergences for desert and forest images
+    avg_kl_desert = (kl_desert1 + kl_desert2) / 2.0
+    avg_kl_forest = (kl_forest1 + kl_forest2) / 2.0
+
+    # Classify based on which average KL divergence is smaller
+    if avg_kl_desert < avg_kl_forest:
+        return 'desert'
+    else:
+        return 'forest'
+    
 def difference_images(img1, img2):
     '''img1 and img2 are the images to take dhe difference
     returns the masked image'''
@@ -252,54 +295,63 @@ def difference_images(img1, img2):
     return masked_image
 
 def main():
-    ###################### Q1
-    # Read original image
-    # Read corrupted image
-    img_path = 'ratio_4_degree_30.png'
-    img = read_image(img_path)
-    # Correct the image with linear interpolation
-    corrected_img_linear = rotate_upsample(img, 4, -30, Interpolation.INTERPOLATION_TYPE.LINEAR)
-    write_image(corrected_img_linear, 'q1_1_corrected_linear.png')
-    # Correct the image with cubic interpolation
-    # corrected_img_cubic = rotate_upsample(img, 4, 30, 'cubic')
-    # write_image(corrected_img_cubic, 'q1_1_corrected_cubic.png')
+    def Q1():
+        ###################### Q1
+        # Read original image
+        # Read corrupted image
+        img_original = read_image('q1_1.png')
+        img_path = 'ratio_4_degree_30.png'
+        img = read_image(img_path)
+        # Correct the image with linear interpolation
+        corrected_img_linear = rotate_upsample(img, 4, 30, Interpolation.INTERPOLATION_TYPE.LINEAR)
+        print("q1_1_corrected_linear.png is saved")
+        write_image(corrected_img_linear, 'q1_1_corrected_linear.png')
+        # Correct the image with cubic interpolation
+        corrected_img_cubic = rotate_upsample(img, 4, 30, Interpolation.INTERPOLATION_TYPE.CUBIC)
+        print("q1_1_corrected_cubic.png is saved")
+        write_image(corrected_img_cubic, 'q1_1_corrected_cubic.png')
 
-    # # Report the distances
-    # print('The distance between original image and image corrected with linear interpolation is ', compute_distance(img_original, corrected_img_linear))
-    # print('The distance between original image and image corrected with cubic interpolation is ', compute_distance(img_original, corrected_img_cubic))
+        # # Report the distances
+        # print('The distance between original image and image corrected with linear interpolation is ', compute_distance(img_original, corrected_img_linear))
+        # print('The distance between original image and image corrected with cubic interpolation is ', compute_distance(img_original, corrected_img_cubic))
 
-    # # Repeat the same steps for the second image
-    # img_original = read_image('q1_2.png')
-    # img = read_image('ratio_8_degree_45.png')
-    # corrected_img_linear = rotate_upsample(img, 8, 45, 'linear')
-    # write_image(corrected_img_linear, 'q1_2_corrected_linear.png')
-    # corrected_img_cubic = rotate_upsample(img, 8, 45, 'cubic')
-    # write_image(corrected_img_cubic, 'q1_2_corrected_cubic.png')
+        # Repeat the same steps for the second image
+        img_original = read_image('q1_2.png')
+        img = read_image('ratio_8_degree_45.png')
+        corrected_img_linear = rotate_upsample(img, 8, 45, Interpolation.INTERPOLATION_TYPE.LINEAR)
+        print("q1_2_corrected_linear.png is saved")
+        write_image(corrected_img_linear, 'q1_2_corrected_linear.png')
+        corrected_img_cubic = rotate_upsample(img, 8, 45, Interpolation.INTERPOLATION_TYPE.CUBIC)
+        print("q1_2_corrected_cubic.png is saved")
+        write_image(corrected_img_cubic, 'q1_2_corrected_cubic.png')
 
-    # # Report the distances
-    # print('The distance between original image and image corrected with linear interpolation is ', compute_distance(img_original, corrected_img_linear))
-    # print('The distance between original image and image corrected with cubic interpolation is ', compute_distance(img_original, corrected_img_cubic))
+        # # Report the distances
+        # print('The distance between original image and image corrected with linear interpolation is ', compute_distance(img_original, corrected_img_linear))
+        # print('The distance between original image and image corrected with cubic interpolation is ', compute_distance(img_original, corrected_img_cubic))
 
-    # ###################### Q2
-    # img = read_image('q2_1.jpg')
-    # result = desert_or_forest(img)
-    # print("Given image q2_1 is an image of a ", result)
+    def Q2():
+        # ###################### Q2
+        img = read_image('q2_1.jpg')
+        result = desert_or_forest(img)
+        print("Given image q2_1 is an image of a ", result)
 
-    # img = read_image('q2_2.jpg')
-    # result = desert_or_forest(img)
-    # print("Given image q2_2 is an image of a ", result)
+        img = read_image('q2_2.jpg')
+        result = desert_or_forest(img)
+        print("Given image q2_2 is an image of a ", result)
 
-    # ###################### Q3
-    # img1 = read_image('q3_a1.png',gray_scale=True)
-    # img2 = read_image('q3_a2.png',gray_scale=True)
-    # result = difference_images(img1,img2)
-    # write_image(result, 'masked_image_a.png')
+    def Q3():
+        # ###################### Q3
+        img1 = read_image('q3_a1.png',gray_scale=True)
+        img2 = read_image('q3_a2.png',gray_scale=True)
+        result = difference_images(img1,img2)
+        write_image(result, 'masked_image_a.png')
 
-    # img1 = read_image('q3_b1.png')
-    # img2 = read_image('q3_b2.png')
-    # result = difference_images(img1,img2)
-    # write_image(result, 'masked_image_b.png')
+        img1 = read_image('q3_b1.png')
+        img2 = read_image('q3_b2.png')
+        result = difference_images(img1,img2)
+        write_image(result, 'masked_image_b.png')
 
+    Q1()
 def test():
     img = read_image('ratio_4_degree_30.png')
     # img = read_image('cat.jpg')
@@ -322,4 +374,4 @@ def test():
 
 
 if __name__ == '__main__':
-    test()
+    main()
