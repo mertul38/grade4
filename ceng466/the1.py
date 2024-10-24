@@ -99,50 +99,31 @@ class BilinearInterpolation(Interpolation):
         super().__init__()
 
     # Bilinear Interpolation Specific Functions
-    def get_linear_neighbours(self, point):
+    def get_linear_neighbours(self, point, h, w):
         points = []
         neighbour_type = None
 
         point_y_int = int(point[0])
         point_x_int = int(point[1])
-        if point[0] == point_y_int and point[1] == point_x_int:
-            neighbour_type = Interpolation.NEIGHBOUR_TYPE.EXACT_POINT
-            points.append(point)
-        elif point[0] == point_y_int or point[1] == point_x_int:
-            if point[0] == point_y_int:
-                neighbour_type = Interpolation.NEIGHBOUR_TYPE.X_DIM_POINT
-                for x in range(point_x_int, point_x_int + 2):
-                    points.append((point_y_int, x))
-            else:
-                neighbour_type = Interpolation.NEIGHBOUR_TYPE.Y_DIM_POINT
-                for y in range(point_y_int, point_y_int + 2):
-                    points.append((y, point_x_int))
-        else:
-            neighbour_type = Interpolation.NEIGHBOUR_TYPE.TWO_DIM_POINT
-            for y in range(point_y_int, point_y_int + 2):
-                for x in range(point_x_int, point_x_int + 2):
-                    points.append((y, x))
-        return (points, neighbour_type)
-    
-    def calculate_bilinear_weights(self, point, neighbour_points, neighbour_type):
-        weights = []
-        if neighbour_type == Interpolation.NEIGHBOUR_TYPE.EXACT_POINT:
-            weights = [1]
-        elif neighbour_type == Interpolation.NEIGHBOUR_TYPE.X_DIM_POINT or neighbour_type == Interpolation.NEIGHBOUR_TYPE.Y_DIM_POINT:
-            dim = None
-            if neighbour_type == Interpolation.NEIGHBOUR_TYPE.X_DIM_POINT:  # Horizontal interpolation
-                dim = 1
-            else:  # Vertical interpolation
-                dim = 0
 
-            for neighbour in neighbour_points:
-                w = 1 - abs(neighbour[dim] - point[dim])
-                weights.append(w)
-        elif neighbour_type == Interpolation.NEIGHBOUR_TYPE.TWO_DIM_POINT:
-            for neighbour in neighbour_points:
-                w = (1 - abs(neighbour[0] - point[0])) * (1 - abs(neighbour[1] - point[1]))
-                weights.append(w)
+        for y in range(point_y_int, point_y_int+2):
+            for x in range(point_x_int, point_x_int+2):
+                y_clamped = min(max(y, 0), h - 1)
+                x_clamped = min(max(x, 0), w - 1)
+                points.append((y_clamped, x_clamped))
+        return points
+    
+    def calculate_bilinear_weights(self, point, neighbour_points):
+        weights = []
+        for neighbour in neighbour_points:
+            weight_x = self.bilinear_kernel(point[1] - neighbour[1])
+            weight_y = self.bilinear_kernel(point[0] - neighbour[0])
+            weights.append(weight_x * weight_y)
         return weights
+
+    def bilinear_kernel(self, t):
+        t = np.abs(t)
+        return 1 - t
 
     def interpolate(self, img, scale):
         h, w = img.shape[:2]
@@ -156,8 +137,8 @@ class BilinearInterpolation(Interpolation):
             for i in range(scaled_w):
                 point = (j, i)
                 q = self.get_reverse_scaled_point(point, scale, h, w)
-                neighbour_points, neighbour_type = self.get_linear_neighbours(q)
-                weights = self.calculate_bilinear_weights(q, neighbour_points, neighbour_type)
+                neighbour_points = self.get_linear_neighbours(q, h, w)
+                weights = self.calculate_bilinear_weights(q, neighbour_points)
                 placed_value = self.calculate_weighted_value(img, neighbour_points, weights)
                 scaled_img[point[0], point[1]] = np.round(placed_value)
 
