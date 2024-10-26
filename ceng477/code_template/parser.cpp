@@ -2,6 +2,8 @@
 #include "tinyxml2.h"
 #include <sstream>
 #include <stdexcept>
+#include <iostream>
+
 
 void parser::Scene::loadFromXml(const std::string &filepath)
 {
@@ -191,6 +193,7 @@ void parser::Scene::loadFromXml(const std::string &filepath)
         stream >> triangle.indices.v0_id >> triangle.indices.v1_id >> triangle.indices.v2_id;
 
         triangles.push_back(triangle);
+        std::cout << "triangle added" << std::endl;
         element = element->NextSiblingElement("Triangle");
     }
 
