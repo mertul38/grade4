@@ -10,6 +10,9 @@ using namespace std;
 
 typedef unsigned char RGB[3];
 
+float EPSILON = 1e-6;
+
+
 void test(){
 
     // The code below creates a test pattern and writes
@@ -51,44 +54,31 @@ void test(){
     write_ppm("test.ppm", image, width, height);
 }
 
-
-// Function to normalize a vector
-Vec3f normalize(const Vec3f& v) {
-    float length = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-    return { v.x / length, v.y / length, v.z / length };
-}
-
-// Function to compute cross product
-Vec3f cross(const Vec3f& a, const Vec3f& b) {
-    return {
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x
-    };
-}
-
-// Function to negate a vector (reverse direction)
-Vec3f negate(const Vec3f& v) {
-    return { -v.x, -v.y, -v.z };
-}
-
-void printVec3f(const std::string& prefix, const Vec3f& v) {
-    std::cout << prefix << ": " <<  v.x << " " << v.y << " " << v.z << std::endl;
-}
-
 // Function to generate a ray for a pixel (i, j)
-Vec3f generateRay(const Camera& camera, int i, int j) {
+void calculateTriangleValues(Scene& scene){
+    for (int i = 0; i < scene.triangles.size(); i++) {
+        Triangle& triangle = scene.triangles[i];
+        Vec3f& v0 = scene.vertex_data[triangle.indices.v0_id];
+        Vec3f& v1 = scene.vertex_data[triangle.indices.v1_id];
+        Vec3f& v2 = scene.vertex_data[triangle.indices.v2_id];
+
+        triangle.E1 = v1 - v0;
+        triangle.E2 = v2 - v0;
+    }
+}
+
+Ray generateRay(const Camera& camera, int i, int j) {
     // Reverse gaze to get -w direction (into the scene)
     // printVec3f("gaze", camera.gaze);
-    Vec3f gaze = normalize(camera.gaze);  // Now gaze points into the scene (along -w)
+    Vec3f gaze = camera.gaze.normalize();  // Now gaze points into the scene (along -w)
     // printVec3f("normalized gaze", gaze);
 
     // printVec3f("up", camera.up);
-    Vec3f up = normalize(camera.up);
+    Vec3f up = camera.up.normalize();
     // printVec3f("normalized up", up);
     // Corrected cross product: right vector (u = up × -gaze)
-    Vec3f right = cross(up, gaze);  // Correct formula as per homework convention
-    right = normalize(right);
+    Vec3f right = up.cross(gaze.negate());  // Correct formula as per homework convention
+    right = right.normalize();
 
     // Camera parameters
     float left = camera.near_plane.x;
@@ -111,26 +101,75 @@ Vec3f generateRay(const Camera& camera, int i, int j) {
         near_distance * gaze.z + u * right.z + v * up.z
     };
 
-    return normalize(ray_direction);
-    return {0, 0, 0};
+    Ray ray = {camera.position, ray_direction};
+
+    return ray;
 }
 
-vector<vector<Vec3f>> processImageRays(const parser::Camera& camera) {
-    
-    vector<vector<Vec3f>> image_rays(camera.image_height, vector<Vec3f>(camera.image_width));
+vector<vector<Ray>> processImageRays(const Camera& camera) {
+    vector<vector<Ray>> image_rays(camera.image_height, vector<Ray>(camera.image_width));
     // Loop over each pixel in the image
     for (int j = 0; j < camera.image_height; ++j) {      // Vertical axis (rows)
         for (int i = 0; i < camera.image_width; ++i) {   // Horizontal axis (columns)
             // Generate a ray for pixel (i, j)
-            parser::Vec3f ray_direction = generateRay(camera, i, j);
+            Ray ray = generateRay(camera, i, j);
             // For debugging, you can print out each generated ray direction
-            printVec3f("Ray direction", ray_direction);
-            image_rays[j][i] = ray_direction;
+            image_rays[j][i] = ray;
             // You can store or use the ray for intersection tests with objects in the scene
         }
     }
 
     return image_rays;
+}
+
+int rayTriangleIntersection(
+    Scene& scene,
+    Vec3f& ray,
+    Vec3f& ray_origin,
+    Triangle& triangle
+    ) {
+
+    // Get the vertices of the triangle
+    Vec3f& v0 = scene.vertex_data[triangle.indices.v0_id];
+    Vec3f& v1 = scene.vertex_data[triangle.indices.v1_id];
+    Vec3f& v2 = scene.vertex_data[triangle.indices.v2_id];
+
+    Vec3f E1 = v1 - v0;
+    Vec3f E2 = v2 - v0;
+    Vec3f T = ray_origin - v0;
+    Vec3f P = ray.cross(E2);
+    Vec3f Q = T.cross(E1);
+
+    float det = P.dot(E1);
+
+    // backface culling
+    if (det < 0) {
+        return 0;
+    }
+    // check if ray and triangle are parallel
+    if (det < EPSILON) {
+        return 0;
+    }
+
+    // calculate u
+    float u = P.dot(T) / det;
+    if (u < 0 || u > 1) {
+        return 0;
+    }
+
+    // calculate v
+    float v = Q.dot(ray) / det;
+    if (v < 0 || u + v > 1) {
+        return 0;
+    }
+
+    // calculate t
+    float t = Q.dot(E2) / det;
+    if (t < 0) {
+        return 0;
+    }
+
+    return t;
 }
 
 
@@ -139,30 +178,31 @@ vector<vector<Vec3f>> processImageRays(const parser::Camera& camera) {
 int main(int argc, char* argv[])
 {
     // Sample usage for reading an XML scene file
-    // parser::Scene scene;
+    parser::Scene scene;
+    scene.loadFromXml(argv[1]);
 
-    // scene.loadFromXml(argv[1]);
+    calculateTriangleValues(scene);
 
-    // ray tracing here
-    // test();
-    
-    parser::Camera camera;
-    camera.position = {0.0f, 0.0f, 0.0f};       // Camera at origin
-    camera.gaze = {0.0f, 0.0f, -1.0f};          // Looking towards negative z
-    camera.up = {0.0f, 1.0f, 0.0f};             // Up along y-axis
-    camera.near_plane = {-1.0f, 1.0f, -1.0f, 1.0f};  // Image plane boundaries (left, right, bottom, top)
-    camera.near_distance = 1.0f;                // Distance from camera to image plane
-    camera.image_width = 1024;
-    camera.image_height = 768;
-    camera.image_name = "output.ppm";
+    // Vec3f ray_origin = {0, 0, 0};
+    // Vec3f ray_direction = {0, 0, 1};
+    // Ray ray = {ray_origin, ray_direction};
 
-    // processImageRays(camera);
-    // slide example for testing
-    // const Vec3f ray = generateRay(camera, 256, 192);
-    // printVec3f("Ray", ray);
+    // for each camera
+    // for(int camera_i = 0; camera_i < scene.cameras.size(); camera_i++) {
+    //     Camera& camera = scene.cameras[camera_i];
+    //     vector<vector<Vec3f>> imageRays = processImageRays(camera);
+    //     // for each pixel
+    //     for (int j = 0; j < camera.image_height; ++j) {
+    //         for (int i = 0; i < camera.image_width; ++i) {
+    //             Vec3f ray = imageRays[j][i];
+    //             // for each triangle
+                
 
-    vector<vector<Vec3f>> imageRays = processImageRays(camera);
-
+    //             break;
+    //         }
+    //     break;
+    //     }
+    // }
 
     return 0;
 
