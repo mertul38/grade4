@@ -6,6 +6,7 @@
 #include "parser.h"
 
 using namespace parser;
+using namespace std;
 
 typedef unsigned char RGB[3];
 
@@ -114,21 +115,22 @@ Vec3f generateRay(const Camera& camera, int i, int j) {
     return {0, 0, 0};
 }
 
-void processImageRays(const parser::Camera& camera) {
+vector<vector<Vec3f>> processImageRays(const parser::Camera& camera) {
+    
+    vector<vector<Vec3f>> image_rays(camera.image_height, vector<Vec3f>(camera.image_width));
     // Loop over each pixel in the image
     for (int j = 0; j < camera.image_height; ++j) {      // Vertical axis (rows)
         for (int i = 0; i < camera.image_width; ++i) {   // Horizontal axis (columns)
             // Generate a ray for pixel (i, j)
             parser::Vec3f ray_direction = generateRay(camera, i, j);
-
             // For debugging, you can print out each generated ray direction
-            std::cout << "Ray for pixel (" << i << ", " << j << "): "
-                      << ray_direction.x << " " << ray_direction.y << " " << ray_direction.z
-                      << std::endl;
-
+            printVec3f("Ray direction", ray_direction);
+            image_rays[j][i] = ray_direction;
             // You can store or use the ray for intersection tests with objects in the scene
         }
     }
+
+    return image_rays;
 }
 
 
@@ -146,15 +148,20 @@ int main(int argc, char* argv[])
     
     parser::Camera camera;
     camera.position = {0.0f, 0.0f, 0.0f};       // Camera at origin
-    camera.gaze = {0.0f, 0.0f, -2.0f};          // Looking towards negative z
+    camera.gaze = {0.0f, 0.0f, -1.0f};          // Looking towards negative z
     camera.up = {0.0f, 1.0f, 0.0f};             // Up along y-axis
     camera.near_plane = {-1.0f, 1.0f, -1.0f, 1.0f};  // Image plane boundaries (left, right, bottom, top)
     camera.near_distance = 1.0f;                // Distance from camera to image plane
-    camera.image_width = 640;
-    camera.image_height = 480;
+    camera.image_width = 1024;
+    camera.image_height = 768;
     camera.image_name = "output.ppm";
 
-    processImageRays(camera);
+    // processImageRays(camera);
+    // slide example for testing
+    // const Vec3f ray = generateRay(camera, 256, 192);
+    // printVec3f("Ray", ray);
+
+    vector<vector<Vec3f>> imageRays = processImageRays(camera);
 
 
     return 0;
