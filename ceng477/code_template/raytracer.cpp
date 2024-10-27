@@ -49,6 +49,7 @@ void actualRayTracing(int argc, char* argv[]) {
 
 int main(int argc, char* argv[])
 {
+
     test_rayGeneration();
     actualRayTracing(argc, argv);
     return 0;
