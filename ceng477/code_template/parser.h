@@ -6,15 +6,22 @@
 #include <cmath>
 #include <iostream>
 #include "ppm.h"
+#include <tuple>
 
 using namespace std;
 
 const float VERTEX_EPSILON = 1e-6;
+const float FLOAT_COMP_EPSILON = 1e-3;
+
 
 namespace parser
 {
     //Notice that all the structures are as simple as possible
     //so that you are not enforced to adopt any style or design.
+    inline bool compareFloats(float a, float b) {
+        return abs(a - b) < FLOAT_COMP_EPSILON;
+    }
+
     struct Vec3f 
     {
         float x, y, z;
@@ -75,6 +82,7 @@ namespace parser
         }
     };
 
+    // my adding
     struct Ray
     {
         Vec3f origin;
@@ -204,10 +212,11 @@ namespace parser
         void calculateNormal() {
             normal = E1.cross(E2).normalize();
         }
-        float rayIntersection (Ray& ray, std::vector<Vec3f> &vertex_data) const{
-            Vec3f& v0 = vertex_data[v0_id];
-            Vec3f& v1 = vertex_data[v1_id];
-            Vec3f& v2 = vertex_data[v2_id];
+        
+        float rayIntersection (Ray& ray, const std::vector<Vec3f> &vertex_data) const{
+            const Vec3f& v0 = vertex_data[v0_id];
+            const Vec3f& v1 = vertex_data[v1_id];
+            const Vec3f& v2 = vertex_data[v2_id];
 
             Vec3f T = ray.origin - v0;
             Vec3f P = ray.direction.cross(E2);
@@ -355,72 +364,6 @@ namespace parser
             return ppm_data;
         }
 
-        void render() {
-            cout << "Rendering Scene" << endl;
-            int camera_i = 0;
-            for (Camera& camera : cameras) {
-                cout << "Rendering Camera " << camera_i++ << endl;
-                camera.calculateRays();
-
-                vector<vector<Vec3i>> image(camera.image_height, vector<Vec3i>(camera.image_width, background_color));
-
-                for (int j = 0; j < camera.image_height; ++j) {
-                    for (int i = 0; i < camera.image_width; ++i) {
-                        Ray& ray = camera.image_rays[j][i];
-                        float closest_t = -1;
-                        Vec3i pixel_color = background_color;
-                        Material* hit_material = nullptr;
-                        Vec3f intersection_point, normal;
-
-                        // Check intersection with spheres
-                        for (const Sphere& sphere : spheres) {
-                            float t = sphere.rayIntersection(ray, vertex_data);
-                            if (t > 0 && (closest_t < 0 || t < closest_t)) {
-                                closest_t = t;
-                                hit_material = &materials[sphere.material_id];
-                                intersection_point = ray.origin + ray.direction * t;
-                                normal = (intersection_point - vertex_data[sphere.center_vertex_id]).normalize();
-                            }
-                        }
-
-                        // Check intersection with mesh faces
-                        for (const Mesh& mesh : meshes) {
-                            for (const Face& face : mesh.faces) {
-                                float t = face.rayIntersection(ray, vertex_data);
-                                if (t > 0 && (closest_t < 0 || t < closest_t)) {
-                                    closest_t = t;
-                                    hit_material = &materials[mesh.material_id];
-                                    intersection_point = ray.origin + ray.direction * t;
-                                    normal = face.normal;  // Use precomputed normal
-                                }
-                            }
-                        }
-
-                        // Check intersection with standalone triangles
-                        for (const Triangle& triangle : triangles) {
-                            float t = triangle.indices.rayIntersection(ray, vertex_data);
-                            if (t > 0 && (closest_t < 0 || t < closest_t)) {
-                                closest_t = t;
-                                hit_material = &materials[triangle.material_id];
-                                intersection_point = ray.origin + ray.direction * t;
-                                normal = triangle.indices.normal;  // Use precomputed normal
-                            }
-                        }
-
-                        // If we hit an object, calculate color
-                        if (hit_material) {
-                            pixel_color = calculateColor(intersection_point, normal, *hit_material, camera.position);
-                        }
-
-                        image[j][i] = pixel_color;
-                    }
-                }
-
-                std::vector<unsigned char> ppm_data = imageToPPMdata(camera, image);
-                write_ppm(camera.image_name.c_str(), ppm_data.data(), camera.image_width, camera.image_height);
-            }
-        }
-
         Vec3i calculateColor(const Vec3f& intersection_point, const Vec3f& normal, const Material& material, const Vec3f& camera_position) {
             Vec3f ambient_color = ambient_light * material.ambient;
 
@@ -452,6 +395,90 @@ namespace parser
 
             // Return as integer color
             return Vec3i{static_cast<int>(final_color.x), static_cast<int>(final_color.y), static_cast<int>(final_color.z)};
+        }
+
+        tuple<float, Vec3i, Vec3f, Vec3f, const Material*> findIntersection(Ray& ray) const {
+            float closest_t = -1;
+            Vec3i pixel_color = background_color;
+            const Material* hit_material = nullptr;
+            Vec3f intersection_point, normal;
+
+            // Check intersection with spheres
+            for (const Sphere& sphere : spheres) {
+                float t = sphere.rayIntersection(ray, vertex_data);
+                if (t > 0 && (closest_t < 0 || t < closest_t)) {
+                    closest_t = t;
+                    hit_material = &materials[sphere.material_id];
+                    intersection_point = ray.origin + ray.direction * t;
+                    normal = (intersection_point - vertex_data[sphere.center_vertex_id]).normalize();
+                }
+            }
+
+            // Check intersection with mesh faces
+            for (const Mesh& mesh : meshes) {
+                for (const Face& face : mesh.faces) {
+                    float t = face.rayIntersection(ray, vertex_data);
+                    if (t > 0 && (closest_t < 0 || t < closest_t)) {
+                        closest_t = t;
+                        hit_material = &materials[mesh.material_id];
+                        intersection_point = ray.origin + ray.direction * t;
+                        normal = face.normal;  // Use precomputed normal
+                    }
+                }
+            }
+
+            // Check intersection with standalone triangles
+            for (const Triangle& triangle : triangles) {
+                float t = triangle.indices.rayIntersection(ray, vertex_data);
+                if (t > 0 && (closest_t < 0 || t < closest_t)) {
+                    closest_t = t;
+                    hit_material = &materials[triangle.material_id];
+                    intersection_point = ray.origin + ray.direction * t;
+                    normal = triangle.indices.normal;  // Use precomputed normal
+                }
+            }
+
+            return std::make_tuple(closest_t, pixel_color, intersection_point, normal, hit_material);
+
+
+
+        }
+
+        void render() {
+            cout << "Rendering Scene" << endl;
+            int camera_i = 0;
+            for (Camera& camera : cameras) {
+                cout << "Rendering Camera " << camera_i++ << endl;
+                camera.calculateRays();
+
+                vector<vector<Vec3i>> image(camera.image_height, vector<Vec3i>(camera.image_width, background_color));
+
+                for (int j = 0; j < camera.image_height; ++j) {
+                    for (int i = 0; i < camera.image_width; ++i) {
+                        Ray& ray = camera.image_rays[j][i];
+                        
+                        // Declare the variables
+                        float closest_t;
+                        Vec3i pixel_color;
+                        Vec3f intersection_point;
+                        Vec3f normal;
+                        const Material* hit_material;
+
+                        // Call the function and assign each return value from the tuple
+                        std::tie(closest_t, pixel_color, intersection_point, normal, hit_material) = findIntersection(ray);
+
+                        // If we hit an object, calculate color
+                        if (hit_material) {
+                            pixel_color = calculateColor(intersection_point, normal, *hit_material, camera.position);
+                        }
+
+                        image[j][i] = pixel_color;
+                    }
+                }
+
+                std::vector<unsigned char> ppm_data = imageToPPMdata(camera, image);
+                write_ppm(camera.image_name.c_str(), ppm_data.data(), camera.image_width, camera.image_height);
+            }
         }
 
 
