@@ -409,33 +409,36 @@ namespace parser
 
         }
 
-
-        Vec3i calculateColor(const Vec3f& intersection_point, const Vec3f& normal, const Material& material, const Vec3f& camera_position, int depth) {
+        Vec3i calculateColor(const Ray& incoming_ray, const Vec3f& intersection_point, const Vec3f& normal, const Material& material, int depth) {
+            // Start with ambient color
             Vec3f color = material.ambient * ambient_light;
-            Vec3f view_dir = (camera_position - intersection_point).normalize();
+            
+            // Calculate view direction
+            Vec3f view_dir = (incoming_ray.origin - intersection_point).normalize();
 
-            // Iterate over each point light
+            // Diffuse and Specular lighting computation
             for (const PointLight& light : point_lights) {
-                Vec3f light_dir = (light.position - intersection_point);
-                Ray light_ray = {intersection_point + normal * shadow_ray_epsilon, light_dir.normalize()};
+                Vec3f light_dir = (light.position - intersection_point).normalize();
                 
+                // Shadow ray check to see if the point is shadowed
+                Ray shadow_ray = {intersection_point + normal * shadow_ray_epsilon, light_dir};
                 float closest_t;
                 Vec3f shadow_intersection, shadow_normal;
                 const Material* shadow_material;
-
-                std::tie(closest_t, shadow_intersection, shadow_normal, shadow_material) = findIntersection(light_ray);
-                
+                std::tie(closest_t, shadow_intersection, shadow_normal, shadow_material) = findIntersection(shadow_ray);
                 if (closest_t > 0) {
-                    continue;  // The point is in shadow
+                    continue; // Skip this light as the point is in shadow
                 }
 
-                float distance = light_dir.length();
-                light_dir = light_dir.normalize();
+                // Lighting calculation if not in shadow
+                float distance = (light.position - intersection_point).length();
                 Vec3f light_intensity = light.intensity / (distance * distance);
 
+                // Diffuse component
                 float diff_factor = std::max(normal.dot(light_dir), 0.0f);
                 Vec3f diffuse = material.diffuse * light_intensity * diff_factor;
 
+                // Specular component using Phong model
                 Vec3f halfway = (view_dir + light_dir).normalize();
                 float spec_factor = std::pow(std::max(normal.dot(halfway), 0.0f), material.phong_exponent);
                 Vec3f specular = material.specular * light_intensity * spec_factor;
@@ -443,7 +446,32 @@ namespace parser
                 color = color + diffuse + specular;
             }
 
-            // Clamp color values to valid range
+            // **Mirror Reflection Calculation** (recursive step)
+            if (material.is_mirror && depth < max_recursion_depth) {
+                // Calculate reflection direction R = I - 2 * (I . N) * N
+                Vec3f reflection_dir = incoming_ray.direction - normal * 2.0f * incoming_ray.direction.dot(normal);
+                Ray reflection_ray = {intersection_point + normal * shadow_ray_epsilon, reflection_dir};
+
+                // Recursively trace the reflection ray
+                float reflection_t;
+                Vec3f reflection_intersection, reflection_normal;
+                const Material* reflection_material;
+                std::tie(reflection_t, reflection_intersection, reflection_normal, reflection_material) = findIntersection(reflection_ray);
+
+                // If the reflection ray hits an object, calculate its color
+                if (reflection_t > 0 && reflection_material) {
+                    Vec3i reflection_color = calculateColor(reflection_ray, reflection_intersection, reflection_normal, *reflection_material, depth + 1);
+                    Vec3f reflection_color_f = {
+                        static_cast<float>(reflection_color.x),
+                        static_cast<float>(reflection_color.y),
+                        static_cast<float>(reflection_color.z)
+                    };
+                    // Combine reflection color based on the mirror reflectance of the material
+                    color = color + material.mirror * reflection_color_f;
+                }
+            }
+
+            // Clamp color values to [0, 255] range
             color.x = std::max(0.0f, std::min(255.0f, color.x));
             color.y = std::max(0.0f, std::min(255.0f, color.y));
             color.z = std::max(0.0f, std::min(255.0f, color.z));
@@ -471,13 +499,12 @@ namespace parser
                         const Material* hit_material;
 
                         // Call the function and assign each return value from the tuple
-                        std::tie(closest_t, intersection_point, normal, hit_material) 
-                        = findIntersection(camera_ray);
+                        std::tie(closest_t, intersection_point, normal, hit_material) = findIntersection(camera_ray);
 
                         Vec3i pixel_color = background_color;
                         // If we hit an object, calculate color
                         if (closest_t > 0) {
-                            pixel_color = calculateColor(intersection_point, normal, *hit_material, camera.position, 0);
+                            pixel_color = calculateColor(camera_ray, intersection_point, normal, *hit_material, 0);
                             // pixel_color = {255, 0, 0};
                             // cout << pixel_color.toString() << endl;
 
