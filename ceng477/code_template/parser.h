@@ -32,6 +32,10 @@ namespace parser
             return { x + other.x, y + other.y, z + other.z };
         }
 
+        Vec3f operator+(const float scalar) const {
+            return { x + scalar, y + scalar, z + scalar };
+        }
+
         // Subtraction operator
         Vec3f operator-(const Vec3f& other) const {
             return { x - other.x, y - other.y, z - other.z };
@@ -85,8 +89,6 @@ namespace parser
             return std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z);
         }
     };
-
-
     // my adding
     struct Ray
     {
@@ -321,6 +323,7 @@ namespace parser
 
         //Functions
         void loadFromXml(const std::string &filepath);
+        
         void calculateAdditiveInfo(){
             // iterate over meshes and triangles and calc face e1 and e2
             cout << "Calculating Camera Parameters" << endl;
@@ -362,44 +365,8 @@ namespace parser
             return ppm_data;
         }
 
-        Vec3i calculateColor(const Vec3f& intersection_point, const Vec3f& normal, const Material& material, const Vec3f& camera_position) const {
-            // Initialize color with ambient component
-            Vec3f color = material.ambient * ambient_light;
-
-            Vec3f view_dir = (camera_position - intersection_point).normalize();
-
-            // Iterate over each point light
-            for (const PointLight& light : point_lights) {
-                // Light direction and distance attenuation
-                Vec3f light_dir = (light.position - intersection_point).normalize();
-                float distance = (light.position - intersection_point).length();
-                Vec3f light_intensity = light.intensity / (distance * distance);  // Inverse square law
-
-                // Diffuse shading
-                float diff_factor = std::max(normal.dot(light_dir), 0.0f);
-                Vec3f diffuse = material.diffuse * light_intensity * diff_factor;
-
-                // Specular shading using Blinn-Phong model
-                Vec3f halfway = (view_dir + light_dir).normalize();
-                float spec_factor = std::pow(std::max(normal.dot(halfway), 0.0f), material.phong_exponent);
-                Vec3f specular = material.specular * light_intensity * spec_factor;
-
-                // Accumulate color from this light
-                color = color + diffuse + specular;
-            }
-
-            // Clamp to ensure valid color range to [0, 255]
-            color.x = std::max(0.0f, std::min(255.0f, color.x));
-            color.y = std::max(0.0f, std::min(255.0f, color.y));
-            color.z = std::max(0.0f, std::min(255.0f, color.z));
-            
-            return {static_cast<int>(color.x), static_cast<int>(color.y), static_cast<int>(color.z)};
-        }
-
-
         tuple<float, Vec3f, Vec3f, const Material*> findIntersection(Ray& ray) const {
             float closest_t = -1;
-            Vec3i pixel_color = background_color;
             const Material* hit_material = nullptr;
             Vec3f intersection_point, normal;
 
@@ -440,8 +407,48 @@ namespace parser
 
             return std::make_tuple(closest_t, intersection_point, normal, hit_material);
 
+        }
 
 
+        Vec3i calculateColor(const Vec3f& intersection_point, const Vec3f& normal, const Material& material, const Vec3f& camera_position, int depth) {
+            Vec3f color = material.ambient * ambient_light;
+            Vec3f view_dir = (camera_position - intersection_point).normalize();
+
+            // Iterate over each point light
+            for (const PointLight& light : point_lights) {
+                Vec3f light_dir = (light.position - intersection_point);
+                Ray light_ray = {intersection_point + normal * shadow_ray_epsilon, light_dir.normalize()};
+                
+                float closest_t;
+                Vec3f shadow_intersection, shadow_normal;
+                const Material* shadow_material;
+
+                std::tie(closest_t, shadow_intersection, shadow_normal, shadow_material) = findIntersection(light_ray);
+                
+                if (closest_t > 0) {
+                    continue;  // The point is in shadow
+                }
+
+                float distance = light_dir.length();
+                light_dir = light_dir.normalize();
+                Vec3f light_intensity = light.intensity / (distance * distance);
+
+                float diff_factor = std::max(normal.dot(light_dir), 0.0f);
+                Vec3f diffuse = material.diffuse * light_intensity * diff_factor;
+
+                Vec3f halfway = (view_dir + light_dir).normalize();
+                float spec_factor = std::pow(std::max(normal.dot(halfway), 0.0f), material.phong_exponent);
+                Vec3f specular = material.specular * light_intensity * spec_factor;
+
+                color = color + diffuse + specular;
+            }
+
+            // Clamp color values to valid range
+            color.x = std::max(0.0f, std::min(255.0f, color.x));
+            color.y = std::max(0.0f, std::min(255.0f, color.y));
+            color.z = std::max(0.0f, std::min(255.0f, color.z));
+
+            return {static_cast<int>(color.x), static_cast<int>(color.y), static_cast<int>(color.z)};
         }
 
         void render() {
@@ -455,7 +462,7 @@ namespace parser
 
                 for (int j = 0; j < camera.image_height; ++j) {
                     for (int i = 0; i < camera.image_width; ++i) {
-                        Ray& ray = camera.image_rays[j][i];
+                        Ray& camera_ray = camera.image_rays[j][i];
                         
                         // Declare the variables
                         float closest_t;
@@ -465,14 +472,14 @@ namespace parser
 
                         // Call the function and assign each return value from the tuple
                         std::tie(closest_t, intersection_point, normal, hit_material) 
-                        = findIntersection(ray);
+                        = findIntersection(camera_ray);
 
                         Vec3i pixel_color = background_color;
                         // If we hit an object, calculate color
                         if (closest_t > 0) {
-                            pixel_color = calculateColor(intersection_point, normal, *hit_material, camera.position);
+                            pixel_color = calculateColor(intersection_point, normal, *hit_material, camera.position, 0);
                             // pixel_color = {255, 0, 0};
-                            cout << pixel_color.toString() << endl;
+                            // cout << pixel_color.toString() << endl;
 
                         }
 
