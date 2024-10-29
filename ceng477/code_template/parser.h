@@ -229,7 +229,7 @@ namespace parser
             float det = P.dot(E1);
 
             // check if ray and triangle are parallel
-            if (fabs(det) < VERTEX_EPSILON) {
+            if (det < 0) {
                 return -1.0f;
             }
 
@@ -307,6 +307,19 @@ namespace parser
 
     struct Scene
     {
+        vector<Vec3i> colors = {
+            {0, 0, 0}, // Black
+            {255, 0, 0}, // Red
+            {0, 255, 0}, // Green
+            {0, 0, 255}, // Blue
+            {255, 255, 0}, // Yellow
+            {0, 255, 255}, // Cyan
+            {255, 0, 255}, // Magenta
+            {255, 255, 255} // White
+        };
+        int log_j = 50;
+        int log_i = 240;
+        bool flag;
         //Data
         Vec3i background_color;
         float shadow_ray_epsilon;
@@ -362,47 +375,61 @@ namespace parser
             return ppm_data;
         }
 
-        tuple<float, Vec3f, Vec3f, const Material*> findIntersection(Ray& ray) const {
+        tuple<float, Vec3f, Vec3f, const Material*, int> findIntersection(Ray& ray) const {
             float closest_t = -1;
             const Material* hit_material = nullptr;
             Vec3f intersection_point, normal;
-
+            string log;
+            int mesh_id = -1;
             // Check intersection with spheres
+            int sphere_i = 0;
             for (const Sphere& sphere : spheres) {
+                sphere_i++;
                 float t = sphere.rayIntersection(ray, vertex_data);
                 if (t > 0 && (closest_t < 0 || t < closest_t)) {
                     closest_t = t;
                     hit_material = getMaterialById(materials, sphere.material_id);
                     intersection_point = ray.origin + ray.direction * t;
                     normal = (intersection_point - *getVertexDataById(vertex_data, sphere.center_vertex_id)).normalize();
+                    log = "sphere_id: " + to_string(sphere_i);
                 }
             }
 
             // Check intersection with mesh faces
+            int mesh_i = 0;
             for (const Mesh& mesh : meshes) {
+                mesh_i++;
+                int face_i = 0;
                 for (const Face& face : mesh.faces) {
+                    face_i++;
                     float t = face.rayIntersection(ray, vertex_data);
                     if (t > 0 && (closest_t < 0 || t < closest_t)) {
                         closest_t = t;
                         hit_material = getMaterialById(materials, mesh.material_id);
                         intersection_point = ray.origin + ray.direction * t;
                         normal = face.normal;  // Use precomputed normal
+                        mesh_id = mesh_i;
+                        log = "mesh_id: " + to_string(mesh_i) + ", face_id: " + to_string(face_i);
                     }
                 }
             }
 
             // Check intersection with standalone triangles
+            int triangle_i = 0;
             for (const Triangle& triangle : triangles) {
+                triangle_i++;
                 float t = triangle.indices.rayIntersection(ray, vertex_data);
                 if (t > 0 && (closest_t < 0 || t < closest_t)) {
                     closest_t = t;
                     hit_material = getMaterialById(materials, triangle.material_id);
                     intersection_point = ray.origin + ray.direction * t;
                     normal = triangle.indices.normal;  // Use precomputed normal
+                    log = "triangle_id: " + to_string(triangle_i);
                 }
             }
 
-            return std::make_tuple(closest_t, intersection_point, normal, hit_material);
+            if (flag) cout << log << endl;
+            return std::make_tuple(closest_t, intersection_point, normal, hit_material, mesh_id);
 
         }
 
@@ -413,30 +440,34 @@ namespace parser
             // Calculate view direction
             Vec3f view_dir = (incoming_ray.origin - intersection_point).normalize();
 
-            // Diffuse and Specular lighting computation
+            // Diffuse and Specular lighting computation]
+            if (flag) cout << "Lighting calculation" << endl;
             for (const PointLight& light : point_lights) {
-                Vec3f light_dir = (light.position - intersection_point).normalize();
-                
+                Vec3f light_dir = (light.position - intersection_point);
+                Vec3f light_dir_normalized = light_dir.normalize();
                 // Shadow ray check to see if the point is shadowed
-                Ray shadow_ray = {intersection_point + normal * shadow_ray_epsilon, light_dir};
+                Ray shadow_ray = {intersection_point + normal * shadow_ray_epsilon, light_dir_normalized};
                 float closest_t;
                 Vec3f shadow_intersection, shadow_normal;
                 const Material* shadow_material;
-                std::tie(closest_t, shadow_intersection, shadow_normal, shadow_material) = findIntersection(shadow_ray);
-                if (closest_t > 0) {
+                int mesh_id;
+
+                std::tie(closest_t, shadow_intersection, shadow_normal, shadow_material,mesh_id) = findIntersection(shadow_ray);
+                if (closest_t > 0 && closest_t < light_dir.length()) {
+                    if (flag) cout << "Point is in shadow" << endl;
                     continue; // Skip this light as the point is in shadow
                 }
 
                 // Lighting calculation if not in shadow
-                float distance = (light.position - intersection_point).length();
+                float distance = light_dir.length();
                 Vec3f light_intensity = light.intensity / (distance * distance);
 
                 // Diffuse component
-                float diff_factor = std::max(normal.dot(light_dir), 0.0f);
+                float diff_factor = std::max(normal.dot(light_dir_normalized), 0.0f);
                 Vec3f diffuse = material.diffuse * light_intensity * diff_factor;
 
                 // Specular component using Phong model
-                Vec3f halfway = (view_dir + light_dir).normalize();
+                Vec3f halfway = (view_dir + light_dir_normalized).normalize();
                 float spec_factor = std::pow(std::max(normal.dot(halfway), 0.0f), material.phong_exponent);
                 Vec3f specular = material.specular * light_intensity * spec_factor;
 
@@ -445,6 +476,7 @@ namespace parser
 
             // **Mirror Reflection Calculation** (recursive step)
             if (material.is_mirror && depth < max_recursion_depth) {
+                if (flag) cout << "Mirror Reflection" << endl;
                 // Calculate reflection direction R = I - 2 * (I . N) * N
                 Vec3f reflection_dir = incoming_ray.direction - normal * 2.0f * incoming_ray.direction.dot(normal);
                 Ray reflection_ray = {intersection_point + normal * shadow_ray_epsilon, reflection_dir};
@@ -453,7 +485,8 @@ namespace parser
                 float reflection_t;
                 Vec3f reflection_intersection, reflection_normal;
                 const Material* reflection_material;
-                std::tie(reflection_t, reflection_intersection, reflection_normal, reflection_material) = findIntersection(reflection_ray);
+                int mesh_id;
+                std::tie(reflection_t, reflection_intersection, reflection_normal, reflection_material,mesh_id) = findIntersection(reflection_ray);
 
                 // If the reflection ray hits an object, calculate its color
                 if (reflection_t > 0 && reflection_material) {
@@ -479,13 +512,16 @@ namespace parser
         void render() {
             int camera_i = 0;
             for (Camera& camera : cameras) {
-                cout << "Rendering Camera " << camera_i++ << endl;
+                cout << "---------------------------" << endl << "Rendering Camera " << camera_i++ << endl;
                 camera.calculateRays();
 
                 vector<vector<Vec3i>> image(camera.image_height, vector<Vec3i>(camera.image_width, background_color));
 
                 for (int j = 0; j < camera.image_height; ++j) {
                     for (int i = 0; i < camera.image_width; ++i) {
+                        if (j == log_j && i == log_i) {
+                            flag = true;
+                        }
                         Ray& camera_ray = camera.image_rays[j][i];
                         
                         // Declare the variables
@@ -493,20 +529,27 @@ namespace parser
                         Vec3f intersection_point;
                         Vec3f normal;
                         const Material* hit_material;
-
+                        int mesh_id;
                         // Call the function and assign each return value from the tuple
-                        std::tie(closest_t, intersection_point, normal, hit_material) = findIntersection(camera_ray);
+                        if (flag) cout << "Primary Ray" << endl;
+                        std::tie(closest_t, intersection_point, normal, hit_material, mesh_id) = findIntersection(camera_ray);
 
                         Vec3i pixel_color = background_color;
                         // If we hit an object, calculate color
                         if (closest_t > 0) {
-                            pixel_color = calculateColor(camera_ray, intersection_point, normal, *hit_material, 0);
+                            if (mesh_id == -2) {
+                                pixel_color = colors[mesh_id];
+                            }
+                            else{
+                                pixel_color = calculateColor(camera_ray, intersection_point, normal, *hit_material, 0);
+                            }
                             // pixel_color = {255, 0, 0};
                             // cout << pixel_color.toString() << endl;
 
                         }
 
                         image[j][i] = pixel_color;
+                        flag = false;
                     }
                 }
 
