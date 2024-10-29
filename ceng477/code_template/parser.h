@@ -144,7 +144,6 @@ namespace parser
 
         void calculateVectorValues(){
             side = up.cross(gaze.negate()).normalize();
-            cout << "side: " << side.toString() << endl;
             const Vec3f image_center = position + gaze * near_distance;
             image_corner = image_center + side * near_plane.x + up * near_plane.w;
             horizontal_ratio = (near_plane.y - near_plane.x) / image_width;
@@ -326,12 +325,10 @@ namespace parser
         
         void calculateAdditiveInfo(){
             // iterate over meshes and triangles and calc face e1 and e2
-            cout << "Calculating Camera Parameters" << endl;
             for (int i = 0; i < cameras.size(); i++) {
                 Camera& camera = cameras[i];
                 camera.calculateAdditiveInfo();
             }
-            cout << "Calculating Face Parameters" << endl;
             for (int i = 0; i < meshes.size(); i++) {
                 for (int j = 0; j < meshes[i].faces.size(); j++) {
                     meshes[i].faces[j].calculateAdditiveInfo(vertex_data);
@@ -480,7 +477,6 @@ namespace parser
         }
 
         void render() {
-            cout << "Rendering Scene" << endl;
             int camera_i = 0;
             for (Camera& camera : cameras) {
                 cout << "Rendering Camera " << camera_i++ << endl;
