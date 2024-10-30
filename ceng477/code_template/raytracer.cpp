@@ -43,7 +43,8 @@ void actualRayTracing(int argc, char* argv[]) {
     scene.loadFromXml(argv[1]);
 
     scene.calculateAdditiveInfo();
-    scene.render();
+    scene.render_multithreaded();
+    cout << "---------------------------" << endl;
 }
 
 int main(int argc, char* argv[])

@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <iostream>
 
+std::mutex parser::Camera::log_mutex;
+std::mutex parser::Scene::log_mutex;
 
 void parser::Scene::loadFromXml(const std::string &filepath)
 {

@@ -7,10 +7,14 @@
 #include <iostream>
 #include "ppm.h"
 #include <tuple>
+#include <thread>
+#include <chrono>
+#include <thread>
+#include <vector>
+#include <mutex>
 
 using namespace std;
 
-const float VERTEX_EPSILON = 1e-6;
 const float FLOAT_COMP_EPSILON = 1e-3;
 
 
@@ -136,6 +140,7 @@ namespace parser
         float vertical_ratio;
         vector<vector<Ray>> image_rays;
 
+        static std::mutex log_mutex;
 
 
         void calculateAdditiveInfo() {
@@ -160,6 +165,56 @@ namespace parser
             }
 
         };
+        // Default ray generation (single-threaded)
+        void calculateRaysSingleThreaded() {
+            auto start = std::chrono::high_resolution_clock::now();
+
+            image_rays = std::vector<std::vector<Ray>>(image_height, std::vector<Ray>(image_width));
+            for (int j = 0; j < image_height; ++j) { // Vertical axis (rows)
+                for (int i = 0; i < image_width; ++i) { // Horizontal axis (columns)
+                    image_rays[j][i] = generateRay(i, j);
+                }
+            }
+
+            auto end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> duration = end - start;
+            std::cout << "All rays calculated in single-threaded mode: " << duration.count() << " seconds" << std::endl;
+        }
+
+        void calculateRaysMultithreaded() {
+            auto start = std::chrono::high_resolution_clock::now();
+            int max_threads = 12;
+            int rows_per_thread = image_height / max_threads;
+            std::vector<std::thread> threads;
+
+            // Lambda for ray calculation over a range of rows
+            auto generateRaysForRows = [&](int start_row, int end_row) {
+                for (int j = start_row; j < end_row; ++j) {
+                    for (int i = 0; i < image_width; ++i) {
+                        image_rays[j][i] = generateRay(i, j);
+                    }
+                }
+            };
+
+            // Launch threads
+            for (int t = 0; t < max_threads; ++t) {
+                int start_row = t * rows_per_thread;
+                int end_row = (t == max_threads - 1) ? image_height : (t + 1) * rows_per_thread;
+                threads.emplace_back(generateRaysForRows, start_row, end_row);
+            }
+
+            // Join all threads
+            for (auto& th : threads) {
+                th.join();
+            }
+
+            auto end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> duration = end - start;
+
+            // Log the total time
+            std::lock_guard<std::mutex> guard(log_mutex);
+            std::cout << "All rays calculated in multithreaded mode: " << duration.count() << " seconds" << std::endl;
+        }
 
         Ray generateRay(int i, int j){
 
@@ -307,19 +362,20 @@ namespace parser
 
     struct Scene
     {
-        vector<Vec3i> colors = {
-            {0, 0, 0}, // Black
-            {255, 0, 0}, // Red
-            {0, 255, 0}, // Green
-            {0, 0, 255}, // Blue
-            {255, 255, 0}, // Yellow
-            {0, 255, 255}, // Cyan
-            {255, 0, 255}, // Magenta
-            {255, 255, 255} // White
-        };
-        int log_j = 50;
-        int log_i = 240;
-        bool flag;
+        // // debug purposes
+        // vector<Vec3i> colors = {
+        //     {0, 0, 0}, // Black
+        //     {255, 0, 0}, // Red
+        //     {0, 255, 0}, // Green
+        //     {0, 0, 255}, // Blue
+        //     {255, 255, 0}, // Yellow
+        //     {0, 255, 255}, // Cyan
+        //     {255, 0, 255}, // Magenta
+        //     {255, 255, 255} // White
+        // };
+        // int log_j = 50;
+        // int log_i = 240;
+        // bool flag;
         //Data
         Vec3i background_color;
         float shadow_ray_epsilon;
@@ -332,6 +388,8 @@ namespace parser
         std::vector<Mesh> meshes;
         std::vector<Triangle> triangles;
         std::vector<Sphere> spheres;
+
+        static std::mutex log_mutex;  // Mutex for safe logging
 
         //Functions
         void loadFromXml(const std::string &filepath);
@@ -428,7 +486,6 @@ namespace parser
                 }
             }
 
-            if (flag) cout << log << endl;
             return std::make_tuple(closest_t, intersection_point, normal, hit_material, mesh_id);
 
         }
@@ -441,7 +498,6 @@ namespace parser
             Vec3f view_dir = (incoming_ray.origin - intersection_point).normalize();
 
             // Diffuse and Specular lighting computation]
-            if (flag) cout << "Lighting calculation" << endl;
             for (const PointLight& light : point_lights) {
                 Vec3f light_dir = (light.position - intersection_point);
                 Vec3f light_dir_normalized = light_dir.normalize();
@@ -454,7 +510,6 @@ namespace parser
 
                 std::tie(closest_t, shadow_intersection, shadow_normal, shadow_material,mesh_id) = findIntersection(shadow_ray);
                 if (closest_t > 0 && closest_t < light_dir.length()) {
-                    if (flag) cout << "Point is in shadow" << endl;
                     continue; // Skip this light as the point is in shadow
                 }
 
@@ -476,7 +531,6 @@ namespace parser
 
             // **Mirror Reflection Calculation** (recursive step)
             if (material.is_mirror && depth < max_recursion_depth) {
-                if (flag) cout << "Mirror Reflection" << endl;
                 // Calculate reflection direction R = I - 2 * (I . N) * N
                 Vec3f reflection_dir = incoming_ray.direction - normal * 2.0f * incoming_ray.direction.dot(normal);
                 Ray reflection_ray = {intersection_point + normal * shadow_ray_epsilon, reflection_dir};
@@ -512,16 +566,16 @@ namespace parser
         void render() {
             int camera_i = 0;
             for (Camera& camera : cameras) {
-                cout << "---------------------------" << endl << "Rendering Camera " << camera_i++ << endl;
+                cout << "Rendering Camera " << camera_i++ << endl;
                 camera.calculateRays();
 
                 vector<vector<Vec3i>> image(camera.image_height, vector<Vec3i>(camera.image_width, background_color));
 
+                auto start = std::chrono::high_resolution_clock::now();
+
                 for (int j = 0; j < camera.image_height; ++j) {
                     for (int i = 0; i < camera.image_width; ++i) {
-                        if (j == log_j && i == log_i) {
-                            flag = true;
-                        }
+
                         Ray& camera_ray = camera.image_rays[j][i];
                         
                         // Declare the variables
@@ -531,33 +585,96 @@ namespace parser
                         const Material* hit_material;
                         int mesh_id;
                         // Call the function and assign each return value from the tuple
-                        if (flag) cout << "Primary Ray" << endl;
                         std::tie(closest_t, intersection_point, normal, hit_material, mesh_id) = findIntersection(camera_ray);
 
                         Vec3i pixel_color = background_color;
                         // If we hit an object, calculate color
                         if (closest_t > 0) {
-                            if (mesh_id == -2) {
-                                pixel_color = colors[mesh_id];
-                            }
-                            else{
-                                pixel_color = calculateColor(camera_ray, intersection_point, normal, *hit_material, 0);
-                            }
+                            pixel_color = calculateColor(camera_ray, intersection_point, normal, *hit_material, 0);
                             // pixel_color = {255, 0, 0};
                             // cout << pixel_color.toString() << endl;
 
                         }
 
                         image[j][i] = pixel_color;
-                        flag = false;
                     }
                 }
+
+                auto end = std::chrono::high_resolution_clock::now();
+                std::chrono::duration<double> duration = end - start;
+                std::cout << "Image rendered in " << duration.count() << " seconds" << std::endl;
 
                 std::vector<unsigned char> ppm_data = imageToPPMdata(camera, image);
                 write_ppm(camera.image_name.c_str(), ppm_data.data(), camera.image_width, camera.image_height);
             }
         }
 
+        void render_multithreaded() {
+            int camera_i = 0;
+            for (Camera& camera : cameras) {
+                std::cout << "Rendering Camera " << camera_i++ << std::endl;
+
+                // Calculate rays first (can use single or multi-threaded ray calculation as you like)
+                camera.calculateRays();
+
+                // Image storage and start time
+                std::vector<std::vector<Vec3i>> image(camera.image_height, std::vector<Vec3i>(camera.image_width, background_color));
+                auto start = std::chrono::high_resolution_clock::now();
+
+                int max_threads = 12;
+                int rows_per_thread = camera.image_height / max_threads;
+                std::vector<std::thread> threads;
+
+                // Lambda function for pixel processing over a range of rows
+                auto processRows = [&](int start_row, int end_row) {
+                    for (int j = start_row; j < end_row; ++j) {
+                        for (int i = 0; i < camera.image_width; ++i) {
+                            Ray& camera_ray = camera.image_rays[j][i];
+                            
+                            // Variables for intersection data
+                            float closest_t;
+                            Vec3f intersection_point, normal;
+                            const Material* hit_material;
+                            int mesh_id;
+
+                            // Find the closest intersection for the ray
+                            std::tie(closest_t, intersection_point, normal, hit_material, mesh_id) = findIntersection(camera_ray);
+
+                            // Calculate pixel color based on intersection data
+                            Vec3i pixel_color = background_color;
+                            if (closest_t > 0) {
+                                pixel_color = calculateColor(camera_ray, intersection_point, normal, *hit_material, 0);
+                            }
+
+                            image[j][i] = pixel_color;
+                        }
+                    }
+                };
+
+                // Launch threads
+                for (int t = 0; t < max_threads; ++t) {
+                    int start_row = t * rows_per_thread;
+                    int end_row = (t == max_threads - 1) ? camera.image_height : (t + 1) * rows_per_thread;
+                    threads.emplace_back(processRows, start_row, end_row);
+                }
+
+                // Join all threads
+                for (auto& th : threads) {
+                    th.join();
+                }
+
+                auto end = std::chrono::high_resolution_clock::now();
+                std::chrono::duration<double> duration = end - start;
+
+                // Log the total time
+                std::lock_guard<std::mutex> guard(log_mutex);
+                std::cout << "All pixels calculated in multithreaded mode: " << duration.count() << " seconds" << std::endl;
+
+                // Convert the image data to PPM format and write it
+                std::vector<unsigned char> ppm_data = imageToPPMdata(camera, image);
+                write_ppm(camera.image_name.c_str(), ppm_data.data(), camera.image_width, camera.image_height);
+            }
+        }
 
     };
 }
