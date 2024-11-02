@@ -39,12 +39,12 @@ void test_rayGeneration() {
 void actualRayTracing(int argc, char* argv[]) {
     // Sample usage for reading an XML scene file
     parser::Scene scene;
-    cout << "Creating scene for " << argv[1] << endl;
+    // cout << "Creating scene for " << argv[1] << endl;
     scene.loadFromXml(argv[1]);
 
     scene.calculateAdditiveInfo();
     scene.render_multithreaded();
-    cout << "---------------------------" << endl;
+    // cout << "---------------------------" << endl;
 }
 
 int main(int argc, char* argv[])
