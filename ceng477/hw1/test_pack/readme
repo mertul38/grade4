@@ -1,0 +1,34 @@
+
+
+All implemetation is implemented in parser.h. raytracer.cpp is only used for running
+
+everything starts in scene struct,
+
+- it loads xml
+- then calculateAdditiveInfo is called to calculate some info which can predefined
+to speed up the process. It also calls the calculation function of other structs, camera and face s.
+- then render is called
+ - it calculates scenes for each camera
+  - firstly, current camera rays are calculated. I tried multrithreading but it 
+  doesn't speed up the process significantly so gave up.
+  - then it calculates the pixel color for each pixel on image plane using
+  corresponding ray.
+   - it calculates the first intersection of the primary ray. if there is not,
+   assign background color.
+   - it calculates pixel color for that intersection, calling calculateColor.
+    - initialize color with ambient light.
+    - checks each point light for shadow sitations.If not in shadow, calculates the diffuse and specular lightning effects.
+    - if there is a mirror effect, it recursively call calculateColor, using a 
+    new ray composing it from reflection of previous ray and the intersection normal.
+    - then return the calculated color.
+
+-multithreading is only applied for pixel calculation, using the number of core times threads at any time (inek machines has 4 cores, so i used 5 threads).
+
+in intersection algorithm:
+- for triangles (faces), moller-trumbore algorithm is used, not barycentric. This algortihm ease my way to apply back face culling.
+- for sphere, the classical equation method is used.
+
+
+Additional Notes:
+
+- all prints and debug purposed declarations are commented, not deleted.
