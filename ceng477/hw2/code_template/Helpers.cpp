@@ -164,3 +164,63 @@ Vec4 multiplyMatrixWithVec4(Matrix4 m, Vec4 v)
 
     return Vec4(values[0], values[1], values[2], values[3], v.colorId);
 }
+
+
+Matrix4 createRotationMatrix(Rotation *rotation)
+{
+    double angleRad = rotation->angle * M_PI / 180.0; // Convert to radians
+    double ux = rotation->ux;
+    double uy = rotation->uy;
+    double uz = rotation->uz;
+
+    // Normalize the axis vector
+    double magnitude = sqrt(ux * ux + uy * uy + uz * uz);
+    if (magnitude > 0)
+    {
+        ux /= magnitude;
+        uy /= magnitude;
+        uz /= magnitude;
+    }
+
+    double cosTheta = cos(angleRad);
+    double sinTheta = sin(angleRad);
+
+    // Construct the rotation matrix
+    double values[4][4] = {
+        {cosTheta + ux * ux * (1 - cosTheta), ux * uy * (1 - cosTheta) - uz * sinTheta, ux * uz * (1 - cosTheta) + uy * sinTheta, 0},
+        {uy * ux * (1 - cosTheta) + uz * sinTheta, cosTheta + uy * uy * (1 - cosTheta), uy * uz * (1 - cosTheta) - ux * sinTheta, 0},
+        {uz * ux * (1 - cosTheta) - uy * sinTheta, uz * uy * (1 - cosTheta) + ux * sinTheta, cosTheta + uz * uz * (1 - cosTheta), 0},
+        {0, 0, 0, 1}};
+    
+    return Matrix4(values);
+}
+
+Matrix4 createScalingMatrix(Scaling *scaling)
+{
+    double sx = scaling->sx;
+    double sy = scaling->sy;
+    double sz = scaling->sz;
+
+    double values[4][4] = {
+        {sx, 0, 0, 0},
+        {0, sy, 0, 0},
+        {0, 0, sz, 0},
+        {0, 0, 0, 1}};
+    
+    return Matrix4(values);
+}
+
+Matrix4 createTranslationMatrix(Translation *translation)
+{
+    double tx = translation->tx;
+    double ty = translation->ty;
+    double tz = translation->tz;
+
+    double values[4][4] = {
+        {1, 0, 0, tx},
+        {0, 1, 0, ty},
+        {0, 0, 1, tz},
+        {0, 0, 0, 1}};
+    
+    return Matrix4(values);
+}

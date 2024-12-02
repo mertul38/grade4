@@ -6,7 +6,9 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <iostream>
 
+#include "Print.h"
 #include "tinyxml2.h"
 #include "Triangle.h"
 #include "Helpers.h"
@@ -386,7 +388,97 @@ void Scene::forwardRenderingPipeline(Camera *camera)
 // 1. Transform vertices to world space
 void Scene::transformVerticesToWorld(Mesh *mesh)
 {
-    // TODO: Implement scaling, rotation, and translation transformations
+	Matrix4 composedTransformationMatrix = getIdentityMatrix();
+	for(int i = 0; i < mesh->transformationTypes.size(); i++){
+		char transformationType = mesh->transformationTypes[i];
+		int transformationID = mesh->transformationIds[i];
+		Matrix4* transformationMatrix = nullptr;
+		switch (transformationType)
+		{
+		case 'r':{
+			Rotation* rotation = nullptr;
+			for (int j=0; j < this->rotations.size(); j++){
+				Rotation* temp = this->rotations[j];
+				if (temp->rotationId == transformationID){
+					rotation = temp;
+					break;
+				}
+			}
+			cout << *rotation << endl;
+			Matrix4 m = createRotationMatrix(rotation);
+			cout << m << endl;
+			transformationMatrix = &m;
+			/* code */
+			break;
+		}
+		case 's':{
+			Scaling* scaling = nullptr;
+			for (int j=0; j < this->scalings.size(); j++){
+				Scaling* temp = this->scalings[j];
+				if (temp->scalingId == transformationID){
+					scaling = temp;
+					break;
+				}
+			}
+			cout << *scaling << endl;
+			Matrix4 m = createScalingMatrix(scaling);
+			cout << m << endl;
+			transformationMatrix = &m;
+
+			/* code */
+			break;
+		}
+		case 't':{
+			Translation* translation = nullptr;
+			for (int j=0; j < this->translations.size(); j++){
+				Translation* temp = this->translations[j];
+				if (temp->translationId == transformationID){
+					translation = temp;
+					break;
+				}
+			}
+			cout << *translation << endl;
+			Matrix4 m = createTranslationMatrix(translation);
+			cout << m << endl;
+			transformationMatrix = &m;
+
+			/* code */
+			break;
+		}
+		default:
+			break;
+		}
+
+		composedTransformationMatrix = multiplyMatrixWithMatrix(*transformationMatrix, composedTransformationMatrix);
+
+		cout << endl << composedTransformationMatrix << endl;
+	}
+	
+	Print("Composed Transformation Matrix Calculated...", nullptr);
+	for (int i = 0; i < mesh->triangles.size(); i++)
+	{
+		Triangle* triangle = &mesh->triangles[i];
+		for (int j = 0; j < 3; j++)
+		{
+			int vertexId = triangle->vertexIds[j];
+			Vec3* vertex = this->vertices[vertexId-1];
+			cout << *vertex << endl;
+			Vec4 extended_vertex = Vec4(vertex->x, vertex->y, vertex->z, 1, vertex->colorId);
+			Vec4 transformed_vertex = multiplyMatrixWithVec4(composedTransformationMatrix, extended_vertex);
+
+			vertex->x = transformed_vertex.x;
+			vertex->y = transformed_vertex.y;
+			vertex->z = transformed_vertex.z;
+
+			cout << "transformed_vertex: " << *vertex << endl;
+
+		}
+		break;
+		// TODO: Transform vertices using transformation matrices
+	}
+
+	
+
 }
 
 // 2. Transform vertices to camera space

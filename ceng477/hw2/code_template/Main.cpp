@@ -28,6 +28,7 @@ int main(int argc, char *argv[])
 
             // do forward rendering pipeline operations
             scene->forwardRenderingPipeline(scene->cameras[i]);
+            break;
 
             // generate PPM file
             scene->writeImageToPPMFile(scene->cameras[i]);
@@ -36,7 +37,6 @@ int main(int argc, char *argv[])
             // Notice that os_type is not given as 1 (Ubuntu) or 2 (Windows), below call doesn't do conversion.
             // Change os_type to 1 or 2, after being sure that you have ImageMagick installed.
             scene->convertPPMToPNG(scene->cameras[i]->outputFilename, 0);
-            break;
         }
 
         return 0;
