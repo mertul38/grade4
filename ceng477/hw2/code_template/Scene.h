@@ -33,6 +33,8 @@ public:
     std::vector<Vec3 *> projected_vertices;
     std::vector<Vec3 *> clipped_vertices;
     std::vector<Vec3 *> new_viewport_vertices;
+    std::vector<std::vector<double>> zBuffer;
+
 
     // Constructor
     Scene(const char *xmlPath);

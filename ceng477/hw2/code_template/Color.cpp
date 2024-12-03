@@ -20,7 +20,15 @@ Color::Color(const Color &other)
     this->g = other.g;
     this->b = other.b;
 }
+    // Operator overload for scaling a color by a scalar
+Color Color::operator*(double scalar) const {
+    return Color(r * scalar, g * scalar, b * scalar);
+}
 
+// Operator overload for adding two colors
+Color Color::operator+(const Color& other) const {
+    return Color(r + other.r, g + other.g, b + other.b);
+}
 std::ostream &operator<<(std::ostream &os, const Color &c)
 {
     os << std::fixed << std::setprecision(0) << "rgb(" << c.r << ", " << c.g << ", " << c.b << ")";

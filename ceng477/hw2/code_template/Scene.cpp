@@ -8,6 +8,7 @@
 #include <cmath>
 #include <iostream>
 #include <algorithm>
+#include <limits>
 
 #include "Print.h"
 #include "tinyxml2.h"
@@ -342,7 +343,8 @@ void Scene::convertPPMToPNG(string ppmFileName, int osType)
 	// call command on Ubuntu
 	if (osType == 1)
 	{
-		command = "./magick " + ppmFileName + " " + ppmFileName + ".png";
+		cout << "convert " << ppmFileName << " " << ppmFileName << ".png" << endl;
+		command = "convert " + ppmFileName + " " + ppmFileName + ".png";
 		system(command.c_str());
 	}
 
@@ -372,6 +374,7 @@ void transform_vertices_to_camera(Scene& scene, Camera& camera)
     Vec3 &v = camera.v; // Camera's up vector
     Vec3 &w = camera.w; // Camera's forward vector (negative gaze)
 
+
     // Construct the view matrix
     double values[4][4] = {
         {u.x, u.y, u.z, -dotProductVec3(u, camera.position)},
@@ -390,7 +393,7 @@ void transform_vertices_to_camera(Scene& scene, Camera& camera)
         Vec4 transformedVertex = multiplyMatrixWithVec4(viewMatrix, extendedVertex);
 
         // Store the transformed vertex in camera_vertices
-        camera.camera_vertices[i] = new Vec3(transformedVertex.x, transformedVertex.y, transformedVertex.z);
+        camera.camera_vertices[i] = new Vec3(transformedVertex.x, transformedVertex.y, transformedVertex.z, worldVertex->colorId);
     }
 
 }
@@ -428,15 +431,14 @@ void project_camera_vertices(Camera& camera)
 
     for (int i = 0; i < camera.projected_vertices.size(); i++)
     {
-        Vec3 *cameraVertex = camera.camera_vertices[i];
-        Vec4 extendedVertex = Vec4(cameraVertex->x, cameraVertex->y, cameraVertex->z, 1);
+        Vec3& cameraVertex = *camera.camera_vertices[i];
+        Vec4 extendedVertex = Vec4(cameraVertex.x, cameraVertex.y, cameraVertex.z, 1);
         Vec4 projectedVertex = multiplyMatrixWithVec4(projectionMatrix, extendedVertex);
-
+		projectedVertex.colorId = cameraVertex.colorId;
         camera.projected_vertices[i] = new Vec4(projectedVertex);
         
     }
 }
-
 
 int computeOutcode(Vec4& v){
     int outcode = 0;
@@ -452,6 +454,8 @@ int computeOutcode(Vec4& v){
 }
 void clip(Camera& camera, Mesh& mesh) {
     
+	mesh.clipped_triangles.clear();
+
     for (Triangle& triangle : mesh.triangles) {
         int v1id = triangle.vertexIds[0];
         int v2id = triangle.vertexIds[1];
@@ -491,33 +495,179 @@ void clip(Camera& camera, Mesh& mesh) {
 void perspective_divide(Camera& camera) {
     camera.perspected_vertices.resize(camera.projected_vertices.size(), nullptr);
     for (int i = 0; i < camera.projected_vertices.size(); i++) {
-        Vec4* v = camera.projected_vertices[i];
-        v->x /= v->t;
-        v->y /= v->t;
-        v->z /= v->t;
+        Vec4& v = *camera.projected_vertices[i];
+		camera.perspected_vertices[i] = new Vec3(
+			v.x / v.t,
+			v.y / v.t,
+			v.z / v.t,
+			v.colorId
+		);
 
-        camera.perspected_vertices[i] = new Vec3(v->x, v->y, v->z);
     }
 }
 
 void viewportTransform(Camera& camera) {
     // Ensure the viewport-transformed vertices vector is resized
-    
     camera.viewport_vertices.resize(camera.perspected_vertices.size(), nullptr);
 
     // Retrieve screen dimensions from the camera
+    double nx = static_cast<double>(camera.horRes);
+    double ny = static_cast<double>(camera.verRes);
+
+    // Define the viewport transformation matrix M_vp
+    double values[4][4] = {
+        {nx / 2, 0, 0, (nx - 1) / 2},
+        {0, ny / 2, 0, (ny - 1) / 2},
+        {0, 0, 1.0 / 2, 1.0 / 2},
+        {0, 0, 0, 1}
+    };
+    Matrix4 viewportMatrix(values);
+
+    // Apply the viewport transformation to each vertex
+    for (int i = 0; i < camera.perspected_vertices.size(); i++) {
+        Vec3& v = *camera.perspected_vertices[i];
+        
+        // Extend the 3D vertex to 4D for matrix multiplication
+        Vec4 extendedVertex(v.x, v.y, v.z, 1);
+
+        // Apply the viewport transformation
+        Vec4 transformedVertex = multiplyMatrixWithVec4(viewportMatrix, extendedVertex);
+
+        // Store the transformed vertex in the viewport_vertices vector
+        camera.viewport_vertices[i] = new Vec3(transformedVertex.x, transformedVertex.y, transformedVertex.z, v.colorId);
+    }
+}
+
+
+void plotPixel(int x, int y, const Color& color, std::vector<std::vector<Color>>& image) {
+    if (x >= 0 && x < image.size() && y >= 0 && y < image[0].size()) {
+        image[x][y] = color; // Set the pixel color
+    }
+}
+
+void drawLine(int x0, int y0, int x1, int y1, const Color& color0, const Color& color1, std::vector<std::vector<Color>>& image) {
+    int dx = abs(x1 - x0);
+    int dy = abs(y1 - y0);
+
+    int sx = (x0 < x1) ? 1 : -1;
+    int sy = (y0 < y1) ? 1 : -1;
+
+    bool isSteep = dy > dx;
+    if (isSteep) {
+        std::swap(x0, y0);
+        std::swap(x1, y1);
+        std::swap(dx, dy);
+    }
+
+    int p = 2 * dy - dx;
+    int x = x0, y = y0;
+
+    // Interpolate color
+    double distance = std::sqrt(dx * dx + dy * dy);
+    for (int i = 0; i <= dx; i++) {
+        // Calculate the interpolated color
+        double t = distance == 0 ? 0 : static_cast<double>(i) / dx;
+        Color interpolatedColor = color0 * (1.0 - t) + color1 * t;
+
+        // Plot the pixel
+        if (isSteep) {
+            plotPixel(y, x, interpolatedColor, image);
+        } else {
+            plotPixel(x, y, interpolatedColor, image);
+        }
+
+        // Move to the next pixel
+        x += sx;
+        if (p >= 0) {
+            y += sy;
+            p -= 2 * dx;
+        }
+        p += 2 * dy;
+    }
+}
+
+void drawLineWithZBuffer(int x0, int y0, double z0, int x1, int y1, double z1, const Color& color0, const Color& color1, std::vector<std::vector<Color>>& image, std::vector<std::vector<double>>& zBuffer) {
+    
+	// this algorith only sure about the x1 is bigger than x0
+	// the cases between y0 and y1 are handled with conditional statements
+	bool isSteep = abs(y1 - y0) > abs(x1 - x0);
+    // Swap x and y if the line is steep
+    if (isSteep) {
+        std::swap(x0, y0);
+        std::swap(x1, y1);
+    }
+
+    // Swap start and end points if necessary to ensure left-to-right drawing
+    bool swapped = false;
+    if (x0 > x1) {
+        std::swap(x0, x1);
+        std::swap(y0, y1);
+        std::swap(z0, z1);
+        swapped = true;
+    }
+
+    int dx = x1 - x0;
+    int dy = abs(y1 - y0);
+    int error = dx / 2;
+
+    int yStep = (y0 < y1) ? 1 : -1;
+    int y = y0;
+
+    // Interpolate color and depth
+    for (int x = x0; x <= x1; x++) {
+        // Calculate the interpolated parameter t
+        double t = (x1 == x0) ? 0.0 : static_cast<double>(x - x0) / dx;
+        // Ensure color interpolation is consistent with the original start and end points
+        Color interpolatedColor = swapped ? (color1 * (1.0 - t) + color0 * t) : (color0 * (1.0 - t) + color1 * t);
+        double interpolatedDepth = z0 * (1.0 - t) + z1 * t;
+        // Determine the correct coordinates based on whether the line is steep
+        int plotX = isSteep ? y : x;
+        int plotY = isSteep ? x : y;
+
+        // Plot the pixel if it passes the Z-buffer test
+        if (plotX >= 0 && plotX < zBuffer.size() && plotY >= 0 && plotY < zBuffer[0].size() && interpolatedDepth < zBuffer[plotX][plotY]) {
+            zBuffer[plotX][plotY] = interpolatedDepth;
+            image[plotX][plotY] = interpolatedColor;
+        }
+
+        // Update error and y coordinate
+        error -= dy;
+        if (error < 0) {
+            y += yStep;
+            error += dx;
+        }
+    }
+}
+
+
+void rasterize(Scene& scene, Camera& camera, Mesh& mesh) {
+    // Initialize the Z-buffer
     int width = camera.horRes;
     int height = camera.verRes;
+    std::vector<std::vector<double>> zBuffer(width, std::vector<double>(height, std::numeric_limits<double>::infinity()));
 
-    // Apply the transformation to each vertex
-    for (Vec3* v : camera.perspected_vertices) {
-        // Perform the viewport transformation
-        double x_screen = (v->x + 1.0) * 0.5 * width;
-        double y_screen = (1.0 - v->y) * 0.5 * height;
-        double z_screen = (v->z + 1.0) * 0.5; // Normalized depth remains in [0, 1]
+    if (mesh.type == WIREFRAME_MESH) {
+        for (const Triangle& triangle : mesh.triangles) {
+            int v1id = triangle.vertexIds[0];
+            int v2id = triangle.vertexIds[1];
+            int v3id = triangle.vertexIds[2];
 
-        // Store the transformed vertex in the viewportVertices vector
-        camera.viewport_vertices.push_back(new Vec3(x_screen, y_screen, z_screen));
+
+            // Get vertices in viewport coordinates
+            Vec3* v1 = camera.viewport_vertices[v1id - 1];
+            Vec3* v2 = camera.viewport_vertices[v2id - 1];
+            Vec3* v3 = camera.viewport_vertices[v3id - 1];
+
+            // Get vertex colors
+            Color* c1 = scene.colorsOfVertices[v1->colorId - 1];
+            Color* c2 = scene.colorsOfVertices[v2->colorId - 1];
+            Color* c3 = scene.colorsOfVertices[v3->colorId - 1];
+
+            // Draw edges of the triangle with interpolated colors
+            drawLineWithZBuffer(round(v1->x), round(v1->y), v1->z, round(v2->x), round(v2->y), v2->z, *c1, *c2, scene.image, zBuffer);
+            drawLineWithZBuffer(round(v2->x), round(v2->y), v2->z, round(v3->x), round(v3->y), v3->z, *c2, *c3, scene.image, zBuffer);
+            drawLineWithZBuffer(round(v3->x), round(v3->y), v3->z, round(v1->x), round(v1->y), v1->z, *c3, *c1, scene.image, zBuffer);
+        }
     }
 }
 
@@ -525,22 +675,29 @@ void viewportTransform(Camera& camera) {
 // MAIN PIPELINE
 void Scene::forwardRenderingPipeline(Camera *camera)
 {
+	cout << *camera << endl;
     // Step 1: Transform vertices to camera space
     transform_vertices_to_camera(*this, *camera);
-	cout << "world vertices size: " << world_vertices.size() << " - " << "camera vertices size: " << camera->camera_vertices.size() << endl;
     cout << "-- Vertices transformed to camera space." << endl;
     project_camera_vertices(*camera);
-	cout << "camera vertices size: " << camera->camera_vertices.size() << " - " << "projected vertices size: " << camera->projected_vertices.size() << endl;
     cout << "-- Vertices projected to clip space." << endl;
     // Step 3: Process each mesh
     for (Mesh *mesh : meshes)
     {
-        clip(*camera, *mesh);
-        cout << "-- Triangles clipped." << endl;
+        // clip(*camera, *mesh);
+        // cout << "-- Triangles clipped." << endl;
         perspective_divide(*camera);
         cout << "-- Triangles perspective divided." << endl;
+		for(int i=0; i<camera->perspected_vertices.size(); i++){
+			cout << *camera->perspected_vertices[i] << endl;
+		}
         viewportTransform(*camera);
         cout << "-- Triangles viewport transformed." << endl;
+		for(int i=0; i<camera->viewport_vertices.size(); i++){
+			cout << *camera->viewport_vertices[i] << endl;
+		}
+		rasterize(*this, *camera, *mesh);
+		cout << "-- Triangles rasterized." << endl;
 		break;
     }
 }
@@ -551,6 +708,7 @@ void Scene::transformVerticesToWorld()
 	for (Mesh* mesh : meshes){
 		Matrix4 composedTransformationMatrix = getIdentityMatrix();
 		for(int i = 0; i < mesh->transformationTypes.size(); i++){
+			
 			char transformationType = mesh->transformationTypes[i];
 			int transformationID = mesh->transformationIds[i];
 			Matrix4* transformationMatrix = nullptr;
@@ -577,7 +735,7 @@ void Scene::transformVerticesToWorld()
 			default:
 				break;
 			}
-
+			
 			composedTransformationMatrix = multiplyMatrixWithMatrix(*transformationMatrix, composedTransformationMatrix);
 		}
 
@@ -593,7 +751,7 @@ void Scene::transformVerticesToWorld()
 				}
 				
 				Vec3* vertex = vertices[vertexId-1];
-				Vec4 extended_vertex = Vec4(vertex->x, vertex->y, vertex->z, 1, vertex->colorId);
+				Vec4 extended_vertex = Vec4(vertex->x, vertex->y, vertex->z, 1);
 				Vec4 transformed_vertex = multiplyMatrixWithVec4(composedTransformationMatrix, extended_vertex);
 			
 				world_vertices[vertexId-1] = new Vec3(transformed_vertex.x, transformed_vertex.y, transformed_vertex.z, vertex->colorId);
