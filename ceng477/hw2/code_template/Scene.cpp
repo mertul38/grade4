@@ -586,29 +586,34 @@ void drawLine(int x0, int y0, int x1, int y1, const Color& color0, const Color& 
     }
 }
 
-void drawLineWithZBuffer(int x0, int y0, double z0, int x1, int y1, double z1, const Color& color0, const Color& color1, std::vector<std::vector<Color>>& image, std::vector<std::vector<double>>& zBuffer) {
+void drawLineWithZBuffer(int x0, int y0, double z0, int x1, int y1, double z1, const Color* color0, const Color* color1, std::vector<std::vector<Color>>& image, std::vector<std::vector<double>>& zBuffer) {
     
 	// this algorith only sure about the x1 is bigger than x0
 	// the cases between y0 and y1 are handled with conditional statements
-	bool isSteep = abs(y1 - y0) > abs(x1 - x0);
-    // Swap x and y if the line is steep
-    if (isSteep) {
+	// these statements provides us to behave all cases as:
+	// slope between 0 and 1 and x0 < x1, meaning in the angle of 0 to -45
+	int dx = abs(x1 - x0);
+	int dy = abs(y1 - y0);
+	bool isSlopeHigh = dy > dx;
+    // Swap x and y if the s;ope is high
+    if (isSlopeHigh) {
         std::swap(x0, y0);
         std::swap(x1, y1);
     }
 
     // Swap start and end points if necessary to ensure left-to-right drawing
-    bool swapped = false;
     if (x0 > x1) {
         std::swap(x0, x1);
         std::swap(y0, y1);
         std::swap(z0, z1);
-        swapped = true;
+		std::swap(color0, color1);
     }
 
-    int dx = x1 - x0;
-    int dy = abs(y1 - y0);
-    int error = dx / 2;
+	// Implement as if it is left to right and below the slope of 1
+    dx = x1 - x0;
+    dy = abs(y1 - y0);
+    
+	int error = dx / 2;
 
     int yStep = (y0 < y1) ? 1 : -1;
     int y = y0;
@@ -618,12 +623,11 @@ void drawLineWithZBuffer(int x0, int y0, double z0, int x1, int y1, double z1, c
         // Calculate the interpolated parameter t
         double t = (x1 == x0) ? 0.0 : static_cast<double>(x - x0) / dx;
         // Ensure color interpolation is consistent with the original start and end points
-        Color interpolatedColor = swapped ? (color1 * (1.0 - t) + color0 * t) : (color0 * (1.0 - t) + color1 * t);
+        Color interpolatedColor = (*color0 * (1.0 - t) + *color1 * t);
         double interpolatedDepth = z0 * (1.0 - t) + z1 * t;
-        // Determine the correct coordinates based on whether the line is steep
-        int plotX = isSteep ? y : x;
-        int plotY = isSteep ? x : y;
-
+        // Determine the correct coordinates based on whether the slope is high
+        int plotX = isSlopeHigh ? y : x;
+        int plotY = isSlopeHigh ? x : y;
         // Plot the pixel if it passes the Z-buffer test
         if (plotX >= 0 && plotX < zBuffer.size() && plotY >= 0 && plotY < zBuffer[0].size() && interpolatedDepth < zBuffer[plotX][plotY]) {
             zBuffer[plotX][plotY] = interpolatedDepth;
@@ -664,9 +668,9 @@ void rasterize(Scene& scene, Camera& camera, Mesh& mesh) {
             Color* c3 = scene.colorsOfVertices[v3->colorId - 1];
 
             // Draw edges of the triangle with interpolated colors
-            drawLineWithZBuffer(round(v1->x), round(v1->y), v1->z, round(v2->x), round(v2->y), v2->z, *c1, *c2, scene.image, zBuffer);
-            drawLineWithZBuffer(round(v2->x), round(v2->y), v2->z, round(v3->x), round(v3->y), v3->z, *c2, *c3, scene.image, zBuffer);
-            drawLineWithZBuffer(round(v3->x), round(v3->y), v3->z, round(v1->x), round(v1->y), v1->z, *c3, *c1, scene.image, zBuffer);
+            drawLineWithZBuffer(round(v1->x), round(v1->y), v1->z, round(v2->x), round(v2->y), v2->z, c1, c2, scene.image, zBuffer);
+            drawLineWithZBuffer(round(v2->x), round(v2->y), v2->z, round(v3->x), round(v3->y), v3->z, c2, c3, scene.image, zBuffer);
+            drawLineWithZBuffer(round(v3->x), round(v3->y), v3->z, round(v1->x), round(v1->y), v1->z, c3, c1, scene.image, zBuffer);
         }
     }
 }
