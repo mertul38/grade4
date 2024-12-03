@@ -19,14 +19,22 @@ int main(int argc, char *argv[])
         const char *xmlPath = argv[1];
 
         scene = new Scene(xmlPath);
+        
 
-        Print("Generating images...", nullptr);
+        scene->transformVerticesToWorld();
+        cout << "vertices size: " << scene->vertices.size() << " - " << "world vertices size: " << scene->world_vertices.size() << endl; 
+        Print("Transformed vertices to world space", nullptr);
+        Print("Iterating over cameras", nullptr);
         for (int i = 0; i < scene->cameras.size(); i++)
         {
+            Print("- Processing camera ", nullptr);
+            // cout << *(scene->cameras[i]) << endl;
             // initialize image with basic values
+            Print("- Initializing image", nullptr);
             scene->initializeImage(scene->cameras[i]);
-
+        
             // do forward rendering pipeline operations
+            Print("- Forward rendering pipeline", nullptr);
             scene->forwardRenderingPipeline(scene->cameras[i]);
             break;
 

@@ -28,6 +28,12 @@ public:
     std::vector<Translation *> translations;
     std::vector<Mesh *> meshes;
 
+    // MY ADDINGS
+    std::vector<Vec3 *> world_vertices;
+    std::vector<Vec3 *> projected_vertices;
+    std::vector<Vec3 *> clipped_vertices;
+    std::vector<Vec3 *> new_viewport_vertices;
+
     // Constructor
     Scene(const char *xmlPath);
 
@@ -35,15 +41,21 @@ public:
     void forwardRenderingPipeline(Camera *camera);
 
     // Pipeline stages
-    void transformVerticesToWorld(Mesh *mesh);
-    void transformVerticesToCamera(Mesh *mesh, Camera *camera);
-    void projectVertices(Mesh *mesh, Camera *camera);
-    void clipTriangles(Mesh *mesh);
-    void mapToViewport(Mesh *mesh, Camera *camera);
-    void rasterizeTriangles(Mesh *mesh, Camera *camera);
+    void transformVerticesToWorld();
+    void projectVertices(Camera *camera);
+    void backfaceCulling(Camera *camera, Mesh *mesh);
+    void clipTriangles(Camera *camera, Mesh *mesh);
+    void mapToViewport(Camera *camera, Mesh *mesh);
+    void rasterizeTriangles(Camera *camera, Mesh *mesh);
 
-    // Utility for depth buffering (optional for rasterization)
-    void updateDepthBuffer(int x, int y, float depth, Color color);
+    // Helper functions
+    bool isBackface(const Vec3 &v1, const Vec3 &v2, const Vec3 &v3, const Vec3 &cameraPosition);
+    void transformVerticesToCamera(Camera *camera);
+    void drawLine(Vec3 *v1, Vec3 *v2, std::vector<std::vector<double>> &depthBuffer, Camera *camera);
+    void updateDepthBuffer(int x, int y, float depth, Color color, std::vector<std::vector<double>> &depthBuffer, Camera *camera);
+    void fillTriangle(Vec3 *v1, Vec3 *v2, Vec3 *v3, std::vector<std::vector<double>> &depthBuffer, Camera *camera);
+    double edgeFunction(Vec3 *v1, Vec3 *v2, Vec3 *p);
+    Color interpolateColor(double w1, double w2, double w3, int colorId1, int colorId2, int colorId3);
 
     // Utility functions
     void initializeImage(Camera *camera);

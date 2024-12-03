@@ -3,6 +3,7 @@
 #define ORTOGRAPHIC_PROJECTION 0
 #define PERSPECTIVE_PROJECTION 1
 #include "Vec3.h"
+#include <vector>
 
 class Camera
 {
@@ -12,6 +13,10 @@ public:
     Vec3 position, gaze, u, v, w;
     double left, right, bottom, top, near, far;
     std::string outputFilename;
+
+    // MY ADDINGS
+    std::vector<Vec3 *> camera_vertices;
+    std::vector<Vec3 *> projected_vertices;
 
     Camera();
 
