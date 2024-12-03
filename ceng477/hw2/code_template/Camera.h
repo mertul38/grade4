@@ -3,6 +3,7 @@
 #define ORTOGRAPHIC_PROJECTION 0
 #define PERSPECTIVE_PROJECTION 1
 #include "Vec3.h"
+#include "Vec4.h"
 #include <vector>
 
 class Camera
@@ -16,7 +17,9 @@ public:
 
     // MY ADDINGS
     std::vector<Vec3 *> camera_vertices;
-    std::vector<Vec3 *> projected_vertices;
+    std::vector<Vec4 *> projected_vertices;
+    std::vector<Vec3 *> perspected_vertices;
+    std::vector<Vec3 *> viewport_vertices;
 
     Camera();
 

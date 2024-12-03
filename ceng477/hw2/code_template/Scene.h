@@ -42,20 +42,6 @@ public:
 
     // Pipeline stages
     void transformVerticesToWorld();
-    void projectVertices(Camera *camera);
-    void backfaceCulling(Camera *camera, Mesh *mesh);
-    void clipTriangles(Camera *camera, Mesh *mesh);
-    void mapToViewport(Camera *camera, Mesh *mesh);
-    void rasterizeTriangles(Camera *camera, Mesh *mesh);
-
-    // Helper functions
-    bool isBackface(const Vec3 &v1, const Vec3 &v2, const Vec3 &v3, const Vec3 &cameraPosition);
-    void transformVerticesToCamera(Camera *camera);
-    void drawLine(Vec3 *v1, Vec3 *v2, std::vector<std::vector<double>> &depthBuffer, Camera *camera);
-    void updateDepthBuffer(int x, int y, float depth, Color color, std::vector<std::vector<double>> &depthBuffer, Camera *camera);
-    void fillTriangle(Vec3 *v1, Vec3 *v2, Vec3 *v3, std::vector<std::vector<double>> &depthBuffer, Camera *camera);
-    double edgeFunction(Vec3 *v1, Vec3 *v2, Vec3 *p);
-    Color interpolateColor(double w1, double w2, double w3, int colorId1, int colorId2, int colorId3);
 
     // Utility functions
     void initializeImage(Camera *camera);

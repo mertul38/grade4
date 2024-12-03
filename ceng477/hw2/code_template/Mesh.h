@@ -15,9 +15,7 @@ public:
     std::vector<Triangle> triangles;
 
     // MY ADDINGS
-    std::vector<Triangle *> visible_triangles;
-    std::vector<Triangle *> clipped_triangles;
-
+    std::vector<Triangle> clipped_triangles;
     Mesh();
     Mesh(int meshId, int type, int numberOfTransformations,
          std::vector<int> transformationIds,
