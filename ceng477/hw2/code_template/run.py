@@ -14,6 +14,9 @@ def run_empty_box():
     cmd = "./rasterizer ../input_outputs/culling_disabled_inputs/empty_box.xml"
     subprocess.run(cmd, shell=True)
 
+def run_filled_box():
+    cmd = "./rasterizer ../input_outputs/culling_disabled_inputs/filled_box.xml"
+    subprocess.run(cmd, shell=True)
 
 
 if __name__ == "__main__":
@@ -23,5 +26,9 @@ if __name__ == "__main__":
 
         if arg == "debug":
             run_debug_box()
+        if arg == "empty":
+            run_empty_box()
+        if arg == "filled":
+            run_filled_box()
     except:
-        run_empty_box()
+        raise "Invalid argument"

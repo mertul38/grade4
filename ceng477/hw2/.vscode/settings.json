@@ -1,5 +1,5 @@
 {
-    "C_Cpp.default.compilerPath": "/usr/bin/g++-11",
+    "C_Cpp.default.compilerPath": "/opt/homebrew/bin/gcc-13",
     "files.associations": {
         "iosfwd": "cpp",
         "iostream": "cpp",

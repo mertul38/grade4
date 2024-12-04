@@ -545,46 +545,6 @@ void plotPixel(int x, int y, const Color& color, std::vector<std::vector<Color>>
     }
 }
 
-void drawLine(int x0, int y0, int x1, int y1, const Color& color0, const Color& color1, std::vector<std::vector<Color>>& image) {
-    int dx = abs(x1 - x0);
-    int dy = abs(y1 - y0);
-
-    int sx = (x0 < x1) ? 1 : -1;
-    int sy = (y0 < y1) ? 1 : -1;
-
-    bool isSteep = dy > dx;
-    if (isSteep) {
-        std::swap(x0, y0);
-        std::swap(x1, y1);
-        std::swap(dx, dy);
-    }
-
-    int p = 2 * dy - dx;
-    int x = x0, y = y0;
-
-    // Interpolate color
-    double distance = std::sqrt(dx * dx + dy * dy);
-    for (int i = 0; i <= dx; i++) {
-        // Calculate the interpolated color
-        double t = distance == 0 ? 0 : static_cast<double>(i) / dx;
-        Color interpolatedColor = color0 * (1.0 - t) + color1 * t;
-
-        // Plot the pixel
-        if (isSteep) {
-            plotPixel(y, x, interpolatedColor, image);
-        } else {
-            plotPixel(x, y, interpolatedColor, image);
-        }
-
-        // Move to the next pixel
-        x += sx;
-        if (p >= 0) {
-            y += sy;
-            p -= 2 * dx;
-        }
-        p += 2 * dy;
-    }
-}
 
 void drawLineWithZBuffer(int x0, int y0, double z0, int x1, int y1, double z1, const Color* color0, const Color* color1, std::vector<std::vector<Color>>& image, std::vector<std::vector<double>>& zBuffer) {
     
@@ -643,7 +603,6 @@ void drawLineWithZBuffer(int x0, int y0, double z0, int x1, int y1, double z1, c
     }
 }
 
-
 void rasterize(Scene& scene, Camera& camera, Mesh& mesh) {
     // Initialize the Z-buffer
     int width = camera.horRes;
@@ -673,6 +632,56 @@ void rasterize(Scene& scene, Camera& camera, Mesh& mesh) {
             drawLineWithZBuffer(round(v3->x), round(v3->y), v3->z, round(v1->x), round(v1->y), v1->z, c3, c1, scene.image, zBuffer);
         }
     }
+    else if(mesh.type == SOLID_MESH){
+        for (const Triangle& triangle : mesh.triangles) {
+            int v1id = triangle.vertexIds[0];
+            int v2id = triangle.vertexIds[1];
+            int v3id = triangle.vertexIds[2];
+
+            // Get vertices in viewport coordinates
+            Vec3* v1 = camera.viewport_vertices[v1id - 1];
+            Vec3* v2 = camera.viewport_vertices[v2id - 1];
+            Vec3* v3 = camera.viewport_vertices[v3id - 1];
+
+            // Get vertex colors
+            Color* c1 = scene.colorsOfVertices[v1->colorId - 1];
+            Color* c2 = scene.colorsOfVertices[v2->colorId - 1];
+            Color* c3 = scene.colorsOfVertices[v3->colorId - 1];
+
+            // Compute bounding box of the triangle
+            int minX = std::max(0, static_cast<int>(std::floor(std::min({v1->x, v2->x, v3->x}))));
+            int maxX = std::min(camera.horRes - 1, static_cast<int>(std::ceil(std::max({v1->x, v2->x, v3->x}))));
+            int minY = std::max(0, static_cast<int>(std::floor(std::min({v1->y, v2->y, v3->y}))));
+            int maxY = std::min(camera.verRes - 1, static_cast<int>(std::ceil(std::max({v1->y, v2->y, v3->y}))));
+
+            // Precompute areas for barycentric calculation
+            double area = (v2->x - v1->x) * (v3->y - v1->y) - (v3->x - v1->x) * (v2->y - v1->y);
+
+            // Iterate over pixels in the bounding box
+            for (int x = minX; x <= maxX; x++) {
+                for (int y = minY; y <= maxY; y++) {
+                    // Calculate barycentric coordinates
+                    double w1 = ((v2->x - x) * (v3->y - y) - (v3->x - x) * (v2->y - y)) / area;
+                    double w2 = ((v3->x - x) * (v1->y - y) - (v1->x - x) * (v3->y - y)) / area;
+                    double w3 = 1.0 - w1 - w2;
+
+                    // Check if the pixel is inside the triangle
+                    if (w1 >= 0 && w2 >= 0 && w3 >= 0) {
+                        // Interpolate depth and color
+                        double z = w1 * v1->z + w2 * v2->z + w3 * v3->z;
+                        Color interpolatedColor = (*c1) * w1 + (*c2) * w2 + (*c3) * w3;
+
+                        // Z-buffer test
+                        if (z < zBuffer[x][y]) {
+                            zBuffer[x][y] = z;
+                            scene.image[x][y] = interpolatedColor;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 
