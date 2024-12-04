@@ -260,6 +260,8 @@ Scene::Scene(const char *xmlPath)
 */
 void Scene::initializeImage(Camera *camera)
 {
+
+	zBuffer = std::vector<std::vector<double>>(camera->horRes, std::vector<double>(camera->verRes, std::numeric_limits<double>::infinity()));
 	if (this->image.empty())
 	{
 		for (int i = 0; i < camera->horRes; i++)
@@ -605,9 +607,6 @@ void drawLineWithZBuffer(int x0, int y0, double z0, int x1, int y1, double z1, c
 
 void rasterize(Scene& scene, Camera& camera, Mesh& mesh) {
     // Initialize the Z-buffer
-    int width = camera.horRes;
-    int height = camera.verRes;
-    std::vector<std::vector<double>> zBuffer(width, std::vector<double>(height, std::numeric_limits<double>::infinity()));
 
     if (mesh.type == WIREFRAME_MESH) {
         for (const Triangle& triangle : mesh.triangles) {
@@ -627,9 +626,9 @@ void rasterize(Scene& scene, Camera& camera, Mesh& mesh) {
             Color* c3 = scene.colorsOfVertices[v3->colorId - 1];
 
             // Draw edges of the triangle with interpolated colors
-            drawLineWithZBuffer(round(v1->x), round(v1->y), v1->z, round(v2->x), round(v2->y), v2->z, c1, c2, scene.image, zBuffer);
-            drawLineWithZBuffer(round(v2->x), round(v2->y), v2->z, round(v3->x), round(v3->y), v3->z, c2, c3, scene.image, zBuffer);
-            drawLineWithZBuffer(round(v3->x), round(v3->y), v3->z, round(v1->x), round(v1->y), v1->z, c3, c1, scene.image, zBuffer);
+            drawLineWithZBuffer(round(v1->x), round(v1->y), v1->z, round(v2->x), round(v2->y), v2->z, c1, c2, scene.image, scene.zBuffer);
+            drawLineWithZBuffer(round(v2->x), round(v2->y), v2->z, round(v3->x), round(v3->y), v3->z, c2, c3, scene.image, scene.zBuffer);
+            drawLineWithZBuffer(round(v3->x), round(v3->y), v3->z, round(v1->x), round(v1->y), v1->z, c3, c1, scene.image, scene.zBuffer);
         }
     }
     else if(mesh.type == SOLID_MESH){
@@ -672,8 +671,8 @@ void rasterize(Scene& scene, Camera& camera, Mesh& mesh) {
                         Color interpolatedColor = (*c1) * w1 + (*c2) * w2 + (*c3) * w3;
 
                         // Z-buffer test
-                        if (z < zBuffer[x][y]) {
-                            zBuffer[x][y] = z;
+                        if (z < scene.zBuffer[x][y]) {
+                            scene.zBuffer[x][y] = z;
                             scene.image[x][y] = interpolatedColor;
                         }
                     }
@@ -711,7 +710,6 @@ void Scene::forwardRenderingPipeline(Camera *camera)
 		}
 		rasterize(*this, *camera, *mesh);
 		cout << "-- Triangles rasterized." << endl;
-		break;
     }
 }
 
