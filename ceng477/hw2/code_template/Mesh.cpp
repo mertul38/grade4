@@ -19,6 +19,14 @@ Mesh::Mesh(int meshId, int type, int numberOfTransformations,
     this->triangles = triangles;
 }
 
+void Mesh::clear(){
+    camera_vertices.clear();
+    projected_vertices.clear();
+    perspected_vertices.clear();
+    viewport_vertices.clear();
+    clipped_triangles.clear();
+}
+
 std::ostream &operator<<(std::ostream &os, const Mesh &m)
 {
     os << "Mesh " << m.meshId;

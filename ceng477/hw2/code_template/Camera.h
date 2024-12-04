@@ -15,12 +15,6 @@ public:
     double left, right, bottom, top, near, far;
     std::string outputFilename;
 
-    // MY ADDINGS
-    std::vector<Vec3 *> camera_vertices;
-    std::vector<Vec4 *> projected_vertices;
-    std::vector<Vec3 *> perspected_vertices;
-    std::vector<Vec3 *> viewport_vertices;
-
     Camera();
 
     Camera(int cameraId,

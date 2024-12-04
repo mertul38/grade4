@@ -18,35 +18,18 @@ int main(int argc, char *argv[])
     {
         const char *xmlPath = argv[1];
 
+
+        std::string path(xmlPath);
+        std::string fileName = path.substr(path.find_last_of("/\\") + 1); // Extract file name
+        std::string baseName = fileName.substr(0, fileName.find_last_of('.')); // Remove extension
+
+        std::cout << "Base name: " << baseName << std::endl;
         scene = new Scene(xmlPath);
+        scene->baseName = baseName;
 
-        scene->transformVerticesToWorld();
-        cout << "Transformed vertices to world space" << endl;
-        cout << "Iterating over cameras" << endl;
-        for (int i = 0; i < scene->cameras.size(); i++)
-        {
-            cout << "- Processing camera " << i << endl;
-            // cout << *(scene->cameras[i]) << endl;
-            // initialize image with basic values
-            cout << "- Initializing image" << endl;
-            scene->initializeImage(scene->cameras[i]);
-        
-            // do forward rendering pipeline operations
-            cout << "- Forward rendering pipeline" << endl;
-            scene->forwardRenderingPipeline(scene->cameras[i]);
+        scene->render();
 
-            
-            // generate PPM file
-            cout << "- Generating PPM file" << endl;
-            scene->writeImageToPPMFile(scene->cameras[i]);
-
-            // Converts PPM image in given path to PNG file, by calling ImageMagick's 'convert' command.
-            // Notice that os_type is not given as 1 (Ubuntu) or 2 (Windows), below call doesn't do conversion.
-            // Change os_type to 1 or 2, after being sure that you have ImageMagick installed.
-            cout << "- Converting PPM to PNG" << endl;
-            scene->convertPPMToPNG(scene->cameras[i]->outputFilename, 1);
-        }
-
+        delete scene;
         return 0;
     }
 }

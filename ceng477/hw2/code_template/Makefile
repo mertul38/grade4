@@ -26,3 +26,7 @@ $(TARGET): $(OBJS)
 clean:
 	rm -f $(OBJS) $(TARGET) *.ppm *.png
 
+clean_out:
+	rm -f *.ppm *.png
+	rm -f -r ./out
+

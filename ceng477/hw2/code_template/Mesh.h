@@ -3,6 +3,8 @@
 #define WIREFRAME_MESH 0
 #define SOLID_MESH 1
 #include "Triangle.h"
+#include "Vec3.h"
+#include "Vec4.h"
 #include <vector>
 
 class Mesh
@@ -15,7 +17,20 @@ public:
     std::vector<Triangle> triangles;
 
     // MY ADDINGS
+    std::vector<Vec3*> world_vertices;
+    std::vector<Triangle* > world_triangles;
+
+    std::vector<Vec3*> camera_vertices;
+    std::vector<Vec4*> projected_vertices;
+    std::vector<Vec3*> perspected_vertices;
+    std::vector<Vec3*> viewport_vertices;
+
+    std::vector<bool> culled_triangles;
+
     std::vector<Triangle> clipped_triangles;
+    
+    void clear();
+
     Mesh();
     Mesh(int meshId, int type, int numberOfTransformations,
          std::vector<int> transformationIds,
