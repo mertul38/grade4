@@ -75,8 +75,30 @@ if __name__ == "__main__":
 
         if arg == "c_empty":
             run(CULL_PATH.EMPTY_BOX.value, True)
+        if arg == "c_filled":
+            run(CULL_PATH.FILLED_BOX.value, True)
+        if arg == "c_flag_c":
+            run(CULL_PATH.FLAG_C.value, True)
         if arg == "c_flag_c_a":
             run(CULL_PATH.FLAG_C_ALTERNATIVE.value, True)
+        if arg == "c_flag_g":
+            run(CULL_PATH.FLAG_G.value, True)
+        if arg == "c_flag_t":
+            run(CULL_PATH.FLAG_T.value, True)
+        if arg == "c_flag_t_a":
+            run(CULL_PATH.FLAG_T_ALTERNATIVE.value, True)
+        if arg == "c_ham":
+            run(CULL_PATH.HORSE_AND_MUG.value, True)
+        if arg == "cull":
+            for path in CULL_PATH:
+                run(path.value, True)
+
+        if arg == "all":
+            for path in NON_CULL_PATH:
+                run(path.value)
+            for path in CULL_PATH:
+                run(path.value, True)
+
 
     except:
         raise "Invalid argument"
