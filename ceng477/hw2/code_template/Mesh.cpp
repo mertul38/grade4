@@ -4,6 +4,7 @@
 
 Mesh::Mesh() {}
 
+
 Mesh::Mesh(int meshId, int type, int numberOfTransformations,
            std::vector<int> transformationIds,
            std::vector<char> transformationTypes,
@@ -24,6 +25,8 @@ void Mesh::clear(){
     projected_vertices.clear();
     perspected_vertices.clear();
     viewport_vertices.clear();
+
+    culled_triangles.clear();
     clipped_triangles.clear();
 }
 

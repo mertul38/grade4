@@ -1,5 +1,5 @@
 {
-    "C_Cpp.default.compilerPath": "/opt/homebrew/bin/gcc-13",
+    "C_Cpp.default.compilerPath": "/usr/bin/g++",
     "files.associations": {
         "iosfwd": "cpp",
         "iostream": "cpp",
@@ -63,6 +63,9 @@
         "locale": "cpp",
         "mutex": "cpp",
         "ratio": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "map": "cpp",
+        "chrono": "cpp",
+        "codecvt": "cpp"
     }
 }

@@ -730,21 +730,15 @@ void Scene::backface_culling(Camera& camera, Mesh& mesh) {
 		Vec3* v2 = mesh.camera_vertices[v2id];
 		Vec3* v3 = mesh.camera_vertices[v3id];
 
-		cout << "v1" << *v1 << "v2" << *v2 << "v3" << *v3 << endl;
-		
-		Vec3 v1v2 = *v2 - *v1;
-		Vec3 v1v3 = *v3 - *v1;
+		Vec3 v1v2 = normalizeVec3(*v2 - *v1);
+		Vec3 v1v3 = normalizeVec3(*v3 - *v1);
 
 		cout << "v1v2" << v1v2 << "v1v3" << v1v3 << endl;
 
-		Vec3 normal = crossProductVec3(normalizeVec3(v1v2), normalizeVec3(v1v3));
+		Vec3 normal = crossProductVec3(v1v3, v1v2);
 		cout << "normal" << normal << endl;
-		Vec3 camera_v = Vec3(*v1);
+		Vec3 camera_v = normalizeVec3(*v1);
 		cout << "camera_v" << camera_v << endl;
-
-		Vec3 normal2 = normalizeVec3(normal);
-		Vec3 camera_v2 = normalizeVec3(camera_v);
-		cout << "normal2" << normal2 << "camera_v2" << camera_v2 << endl;
 
 		double dot = dotProductVec3(normal, camera_v);
 		cout << "dot" << dot << endl;
