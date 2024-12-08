@@ -52,6 +52,9 @@ public:
     void backface_culling(Camera& camera, Mesh& mesh);
     void rasterize(Camera& camera, Mesh& mesh);
     void drawLineWithZBuffer(int x0, int y0, double z0, int x1, int y1, double z1, const Color* color0, const Color* color1);
+    
+    void clip_wireframe_mesh(Mesh& mesh);
+    std::vector<Vec4*> Scene::clip_triangle(Mesh& mesh, Triangle& triangle);
     // Utility functions
     void initializeImage(Camera *camera);
     int makeBetweenZeroAnd255(double value);

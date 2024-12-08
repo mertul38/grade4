@@ -425,63 +425,6 @@ void Scene::myConvertPPMToPNG(string ppmFileName, int osType)
 	}
 }
 
-// MY ADDINGS
-
-
-// int computeOutcode(Vec4& v){
-//     int outcode = 0;
-
-//     if(v.x < -v.t) outcode |= 1 << 0;
-//     if (v.x > v.t) outcode |= 1 << 1;
-//     if (v.y < -v.t) outcode |= 1 << 2;
-//     if (v.y > v.t) outcode |= 1 << 3;
-//     if (v.z < -v.t) outcode |= 1 << 4;
-//     if (v.z > v.t) outcode |= 1 << 5;
-
-//     return outcode;
-// }
-// void clip(Camera& camera, Mesh& mesh) {
-    
-// 	mesh.clipped_triangles.clear();
-
-//     for (Triangle& triangle : mesh.triangles) {
-//         int v1id = triangle.vertexIds[0];
-//         int v2id = triangle.vertexIds[1];
-//         int v3id = triangle.vertexIds[2];
-
-//         Vec4& v1 = *camera.projected_vertices[v1id - 1];
-//         Vec4& v2 = *camera.projected_vertices[v2id - 1];
-//         Vec4& v3 = *camera.projected_vertices[v3id - 1];
-
-//         // Compute outcodes for each vertex
-//         int outcode1 = computeOutcode(v1);
-//         int outcode2 = computeOutcode(v2);
-//         int outcode3 = computeOutcode(v3);
-
-//         // cout << "Vertex 1: " << v1 << " Outcode: " << outcode1 << endl;
-//         // cout << "Vertex 2: " << v2 << " Outcode: " << outcode2 << endl;
-//         // cout << "Vertex 3: " << v3 << " Outcode: " << outcode3 << endl;
-
-//         // Trivial Accept: All vertices are inside
-//         if ((outcode1 | outcode2 | outcode3) == 0) {
-//             mesh.clipped_triangles.push_back(triangle);
-//             continue;
-//         }
-
-//         // Trivial Reject: All vertices share an outside region
-//         if ((outcode1 & outcode2 & outcode3) != 0) {
-//             // Entire triangle is outside; skip it
-//             continue;
-//         }
-
-//         // Non-Trivial Case: Clip the triangle
-//         // not implemented yed
-//     }
-
-// }
-
-
-
 void Scene::transform_vertices_to_world(Mesh& mesh) 
 {
 	std::vector<Triangle*> world_triangles;
@@ -649,9 +592,6 @@ void Scene::project_camera_vertices(Camera& camera, Mesh& mesh)
         
     }
 
-	cout << "Camera Size: " << mesh.camera_vertices.size() << endl;
-	cout << "Projected Size: " << projected_vertices.size() << endl;
-
 	mesh.projected_vertices = projected_vertices;
 }
 
@@ -670,8 +610,6 @@ void Scene::perspective_divide(Mesh& mesh) {
 			));
     }
 
-	cout << "Projected Size: " << mesh.projected_vertices.size() << endl;
-	cout << "Perspective Size: " << perspected_vertices.size() << endl;
 	mesh.perspected_vertices = perspected_vertices;
 }
 
@@ -711,9 +649,6 @@ void Scene::viewport_transform(Camera& camera, Mesh& mesh) {
 				v.colorId));
     }
 
-	cout << "Perspected size: " << mesh.perspected_vertices.size() << endl;
-	cout << "Viewport size: " << viewport_vertices.size() << endl;
-
 	mesh.viewport_vertices = viewport_vertices;
 }
 
@@ -733,15 +668,10 @@ void Scene::backface_culling(Camera& camera, Mesh& mesh) {
 		Vec3 v1v2 = normalizeVec3(*v2 - *v1);
 		Vec3 v1v3 = normalizeVec3(*v3 - *v1);
 
-		cout << "v1v2" << v1v2 << "v1v3" << v1v3 << endl;
-
 		Vec3 normal = crossProductVec3(v1v3, v1v2);
-		cout << "normal" << normal << endl;
 		Vec3 camera_v = normalizeVec3(*v1);
-		cout << "camera_v" << camera_v << endl;
 
 		double dot = dotProductVec3(normal, camera_v);
-		cout << "dot" << dot << endl;
 
 		if (dot < EPSILON) {
 			mesh.culled_triangles.push_back(false);
@@ -756,7 +686,6 @@ void Scene::backface_culling(Camera& camera, Mesh& mesh) {
 void Scene::rasterize(Camera& camera, Mesh& mesh) {
     // Initialize the Z-buffer
 	for (int i = 0; i < mesh.world_triangles.size(); i++) {
-		cout << "Rasterizing triangle " << i << endl;
 		Triangle& triangle = *mesh.world_triangles[i];
 		if (cullingEnabled && !mesh.culled_triangles[i]) {
 			continue;
@@ -765,24 +694,17 @@ void Scene::rasterize(Camera& camera, Mesh& mesh) {
 		int v2id = triangle.vertexIds[1];
 		int v3id = triangle.vertexIds[2];
 
-		cout << "Vertix ids: " << v1id << ", " << v2id << ", " << v3id << endl;
-		cout << mesh.viewport_vertices.size() << endl;
 		// Get vertices in viewport coordinates
 		Vec3* v1 = mesh.viewport_vertices[v1id];
 		Vec3* v2 = mesh.viewport_vertices[v2id];
 		Vec3* v3 = mesh.viewport_vertices[v3id];
-
-		cout << "Vertices: " << *v1 << ", " << *v2 << ", " << *v3 << endl;
 
 		// Get vertex colors
 		Color* c1 = colorsOfVertices[v1->colorId - 1];
 		Color* c2 = colorsOfVertices[v2->colorId - 1];
 		Color* c3 = colorsOfVertices[v3->colorId - 1];
 
-		cout << "Colors: " << *c1 << ", " << *c2 << ", " << *c3 << endl;
-
 		if (mesh.type == WIREFRAME_MESH) {
-			cout << "Wireframe mesh" << endl;
 			// Draw edges of the triangle with interpolated colors
 			drawLineWithZBuffer(round(v1->x), round(v1->y), v1->z, round(v2->x), round(v2->y), v2->z, c1, c2);
 			drawLineWithZBuffer(round(v2->x), round(v2->y), v2->z, round(v3->x), round(v3->y), v3->z, c2, c3);
@@ -882,6 +804,29 @@ void Scene::drawLineWithZBuffer(int x0, int y0, double z0, int x1, int y1, doubl
     }
 }
 
+std::vector<Vec4*> Scene::clip_triangle(Mesh& mesh, Triangle& triangle) {
+	Vec4& v0 = *mesh.projected_vertices[triangle.vertexIds[0]];
+	Vec4& v1 = *mesh.projected_vertices[triangle.vertexIds[1]];
+	Vec4& v2 = *mesh.projected_vertices[triangle.vertexIds[2]];
+
+	std::vector<Vec4*> vertices = { &v0, &v1, &v2 };
+}
+
+void Scene::clip_wireframe_mesh(Mesh& mesh) {
+
+	std::vector<Vec4*> clipped_vertices;
+	std::vector<Triangle> clipped_triangles;
+
+	for (int i = 0; i < mesh.triangles.size(); i++) {
+		Triangle& triangle = *mesh.world_triangles[i];
+
+		std::vector<Vec4*> new_triangle_vertices = clip_triangle(mesh, triangle);
+
+	}
+
+}
+
+
 
 void Scene::render() {
 	cout << "Rendering..." << endl;
@@ -910,6 +855,18 @@ void Scene::render() {
 
 			cout << "	Projecting camera vertices..." << endl;
 			project_camera_vertices(*camera, *mesh);
+
+			cout << "--------------------------" << endl;
+			for(int j=0; j<mesh->projected_vertices.size(); j++){
+				Vec4* v = mesh->projected_vertices[j];
+				cout << "	Projected vertex " << j << ": " << *v << endl;
+			}
+			cout << "--------------------------" << endl;
+
+            if (mesh->type == WIREFRAME_MESH) {
+                cout << "    Clipping wireframe mesh..." << endl;
+                clip_wireframe_mesh(*mesh); // Adjusted position
+            }
 
 			cout << "	Perspective dividing..." << endl;
 			perspective_divide(*mesh);

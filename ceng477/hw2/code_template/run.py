@@ -97,7 +97,7 @@ if __name__ == "__main__":
             for path in NON_CULL_PATH:
                 run(path.value)
             for path in CULL_PATH:
-                run(path.value, True)
+                run(path.value, True)  
 
 
     except:
