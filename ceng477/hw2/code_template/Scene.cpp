@@ -804,25 +804,149 @@ void Scene::drawLineWithZBuffer(int x0, int y0, double z0, int x1, int y1, doubl
     }
 }
 
-std::vector<Vec4*> Scene::clip_triangle(Mesh& mesh, Triangle& triangle) {
-	Vec4& v0 = *mesh.projected_vertices[triangle.vertexIds[0]];
-	Vec4& v1 = *mesh.projected_vertices[triangle.vertexIds[1]];
-	Vec4& v2 = *mesh.projected_vertices[triangle.vertexIds[2]];
 
-	std::vector<Vec4*> vertices = { &v0, &v1, &v2 };
+
+bool Scene::is_inside(const Vec4* vertex, FrustumPlane plane) {
+    switch (plane) {
+        case NEAR_PLANE: return vertex->z > -vertex->t;  // Near
+        case FAR_PLANE: return vertex->z < vertex->t;   // Far
+        case LEFT_PLANE: return vertex->x > -vertex->t;  // Left
+        case RIGHT_PLANE: return vertex->x < vertex->t;   // Right
+        case BOTTOM_PLANE: return vertex->y > -vertex->t;  // Bottom
+        case TOP_PLANE: return vertex->y < vertex->t;   // Top
+        default: return true;
+    }
+}
+
+Vec4* Scene::intersect(const Vec4* v1, const Vec4* v2, FrustumPlane plane) {
+    double t;
+
+    switch (plane) {
+        case NEAR_PLANE: t = (-v1->t - v1->z) / ((v2->z - v1->z) + (v2->t - v1->t)); break; // Near
+        case FAR_PLANE: t = (v1->t - v1->z) / ((v2->z - v1->z) - (v2->t - v1->t)); break;  // Far
+        case LEFT_PLANE: t = (-v1->t - v1->x) / ((v2->x - v1->x) + (v2->t - v1->t)); break; // Left
+        case RIGHT_PLANE: t = (v1->t - v1->x) / ((v2->x - v1->x) - (v2->t - v1->t)); break;  // Right
+        case BOTTOM_PLANE: t = (-v1->t - v1->y) / ((v2->y - v1->y) + (v2->t - v1->t)); break; // Bottom
+        case TOP_PLANE: t = (v1->t - v1->y) / ((v2->y - v1->y) - (v2->t - v1->t)); break;  // Top
+        default: t = 0.0; break;
+    }
+
+    return new Vec4(
+        v1->x + t * (v2->x - v1->x),
+        v1->y + t * (v2->y - v1->y),
+        v1->z + t * (v2->z - v1->z),
+        v1->t + t * (v2->t - v1->t),
+        v1->colorId
+    );
+}
+
+
+std::vector<Vec4*> Scene::clip_against_plane(const std::vector<Vec4*>& vertices, FrustumPlane plane) {
+    std::vector<Vec4*> clipped;
+
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        Vec4* current = vertices[i];
+        Vec4* next = vertices[(i + 1) % vertices.size()];
+
+        // Check if current and next vertices are inside the plane
+        bool current_inside = is_inside(current, plane);
+        bool next_inside = is_inside(next, plane);
+		cout << " current: " << *current << " inside: " << current_inside << " next: " << *next << " inside: " << next_inside << endl;
+
+        if (current_inside && next_inside) {
+            clipped.push_back(next); // Both inside: keep next
+        } else if (current_inside && !next_inside) {
+            clipped.push_back(intersect(current, next, plane)); // Exiting: add intersection
+        } else if (!current_inside && next_inside) {
+            clipped.push_back(intersect(current, next, plane)); // Entering: add intersection
+            clipped.push_back(next);
+        }
+    }
+
+    return clipped;
+}
+
+std::vector<Vec4*> Scene::clip_triangle(Mesh& mesh, Triangle& triangle) {
+    Vec4& v0 = *mesh.projected_vertices[triangle.vertexIds[0]];
+    Vec4& v1 = *mesh.projected_vertices[triangle.vertexIds[1]];
+    Vec4& v2 = *mesh.projected_vertices[triangle.vertexIds[2]];
+
+	// // test vertices
+	// Vec4& v0 = *new Vec4(-3, -3, 0, 5);
+	// Vec4& v1 = *new Vec4(-7, -4, 0, 5);
+	// Vec4& v2 = *new Vec4(-4, -7, 0, 5);
+
+	cout << "v0: " << v0 << endl;
+	cout << "v1: " << v1 << endl;
+	cout << "v2: " << v2 << endl;
+
+    // Start with the triangle's vertices
+    std::vector<Vec4*> vertices = { &v0, &v1, &v2 };
+
+    // Clip against all six frustum planes
+    for (int plane = NEAR_PLANE; plane <= TOP_PLANE; ++plane) {
+        vertices = clip_against_plane(vertices, static_cast<FrustumPlane>(plane));
+		cout << "Plane: " << plane << endl;
+		cout << "Vertices: " << endl;
+		for (int i = 0; i < vertices.size(); i++) {
+			cout << "Vertex " << i << ": " << *vertices[i] << endl;
+		}
+		cout << "--------------------------" << endl;
+        if (vertices.size() < 3) {
+            // If less than 3 vertices remain, the triangle is fully clipped
+            return {};
+        }
+
+    }
+
+	for (int i = 0; i < vertices.size(); i++) {
+		cout << "New Vertex " << i << ": " << *vertices[i] << endl;
+	}
+
+    return vertices;
 }
 
 void Scene::clip_wireframe_mesh(Mesh& mesh) {
 
 	std::vector<Vec4*> clipped_vertices;
-	std::vector<Triangle> clipped_triangles;
+	std::vector<Triangle* > clipped_triangles;
 
-	for (int i = 0; i < mesh.triangles.size(); i++) {
+	for (int i = 0; i < mesh.world_triangles.size(); i++) {
 		Triangle& triangle = *mesh.world_triangles[i];
 
 		std::vector<Vec4*> new_triangle_vertices = clip_triangle(mesh, triangle);
+		std::vector<int> new_triangle_verices_map_indices;
+		int new_vertices_size = new_triangle_vertices.size();
+		if (new_vertices_size >= 3) {
+			for (int j = 0; j < new_vertices_size; j++) {
+				new_triangle_verices_map_indices.push_back(clipped_vertices.size());
+				clipped_vertices.push_back(new_triangle_vertices[j]);
+			}
 
+			int center_v_id = new_triangle_verices_map_indices[0];
+			for (int j = 1; j+1 < new_vertices_size; j++) {
+				int v2_id = new_triangle_verices_map_indices[j];
+				int v3_id = new_triangle_verices_map_indices[j+1];
+
+				Triangle* new_triangle = new Triangle(center_v_id, v2_id, v3_id);
+				clipped_triangles.push_back(new_triangle);
+			}
+		}
 	}
+
+	cout << "clipeed vertices" << endl;
+	for (int i = 0; i < clipped_vertices.size(); i++) {
+		cout << "Vertex " << i << ": " << *clipped_vertices[i] << endl;
+	}
+	cout << "clipeed triangles" << endl;
+	for (int i = 0; i < clipped_triangles.size(); i++) {
+		cout << "Triangle " << i << ": " << clipped_triangles[i] << endl;
+	}
+
+	mesh.world_triangles = clipped_triangles;
+	mesh.projected_vertices = clipped_vertices;
+
+	
 
 }
 
@@ -879,6 +1003,7 @@ void Scene::render() {
 
 			cout << "	Rasterizing..." << endl;
 			rasterize(*camera, *mesh);
+			break;
 		}
 
 		myWriteImageToPPMFile(cameras[i]);

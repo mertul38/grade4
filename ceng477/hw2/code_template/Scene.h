@@ -12,6 +12,14 @@
 #include "Helpers.h"
 #include <vector>
 
+enum FrustumPlane {
+    NEAR_PLANE = 0,
+    FAR_PLANE = 1,
+    LEFT_PLANE = 2,
+    RIGHT_PLANE = 3,
+    BOTTOM_PLANE = 4,
+    TOP_PLANE = 5
+};
 class Scene
 {
 public:
@@ -43,6 +51,8 @@ public:
     // Main rendering pipeline
     void render();
 
+
+
     // Pipeline stages
     void transform_vertices_to_world(Mesh& mesh);
     void transform_vertices_to_camera(Camera& camera, Mesh& mesh);
@@ -54,7 +64,10 @@ public:
     void drawLineWithZBuffer(int x0, int y0, double z0, int x1, int y1, double z1, const Color* color0, const Color* color1);
     
     void clip_wireframe_mesh(Mesh& mesh);
-    std::vector<Vec4*> Scene::clip_triangle(Mesh& mesh, Triangle& triangle);
+    std::vector<Vec4*> clip_triangle(Mesh& mesh, Triangle& triangle);
+    std::vector<Vec4*> clip_against_plane(const std::vector<Vec4*>& vertices, FrustumPlane plane);
+    bool is_inside(const Vec4* vertex, FrustumPlane plane);
+    Vec4* intersect(const Vec4* v1, const Vec4* v2, FrustumPlane plane);
     // Utility functions
     void initializeImage(Camera *camera);
     int makeBetweenZeroAnd255(double value);
