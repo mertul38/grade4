@@ -17,17 +17,18 @@ public:
     std::vector<Triangle> triangles;
 
     // MY ADDINGS
-    std::vector<Vec3*> world_vertices;
     std::vector<Triangle* > world_triangles;
+    std::vector<Triangle* > clipped_triangles;
 
+    std::vector<Vec3*> world_vertices;
     std::vector<Vec3*> camera_vertices;
     std::vector<Vec4*> projected_vertices;
+    std::vector<Vec4*> clipped_vertices;
     std::vector<Vec3*> perspected_vertices;
     std::vector<Vec3*> viewport_vertices;
 
     std::vector<bool> culled_triangles;
 
-    std::vector<Triangle> clipped_triangles;
     
     void clear();
 

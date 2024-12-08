@@ -599,8 +599,8 @@ void Scene::perspective_divide(Mesh& mesh) {
 
 	std::vector<Vec3*> perspected_vertices;
 
-    for (int i = 0; i < mesh.projected_vertices.size(); i++) {
-        Vec4& v = *mesh.projected_vertices[i];
+    for (int i = 0; i < mesh.clipped_vertices.size(); i++) {
+        Vec4& v = *mesh.clipped_vertices[i];
 		perspected_vertices.push_back(
 			new Vec3(
 				v.x / v.t,
@@ -685,8 +685,10 @@ void Scene::backface_culling(Camera& camera, Mesh& mesh) {
 
 void Scene::rasterize(Camera& camera, Mesh& mesh) {
     // Initialize the Z-buffer
-	for (int i = 0; i < mesh.world_triangles.size(); i++) {
-		Triangle& triangle = *mesh.world_triangles[i];
+	std::vector<Triangle*> triangles = mesh.type == WIREFRAME_MESH ? mesh.clipped_triangles : mesh.world_triangles;
+
+	for (int i = 0; i < mesh.clipped_triangles.size(); i++) {
+		Triangle& triangle = *mesh.clipped_triangles[i];
 		if (cullingEnabled && !mesh.culled_triangles[i]) {
 			continue;
 		}
@@ -851,7 +853,7 @@ std::vector<Vec4*> Scene::clip_against_plane(const std::vector<Vec4*>& vertices,
         // Check if current and next vertices are inside the plane
         bool current_inside = is_inside(current, plane);
         bool next_inside = is_inside(next, plane);
-		cout << " current: " << *current << " inside: " << current_inside << " next: " << *next << " inside: " << next_inside << endl;
+		// cout << " current: " << *current << " inside: " << current_inside << " next: " << *next << " inside: " << next_inside << endl;
 
         if (current_inside && next_inside) {
             clipped.push_back(next); // Both inside: keep next
@@ -876,22 +878,18 @@ std::vector<Vec4*> Scene::clip_triangle(Mesh& mesh, Triangle& triangle) {
 	// Vec4& v1 = *new Vec4(-7, -4, 0, 5);
 	// Vec4& v2 = *new Vec4(-4, -7, 0, 5);
 
-	cout << "v0: " << v0 << endl;
-	cout << "v1: " << v1 << endl;
-	cout << "v2: " << v2 << endl;
-
     // Start with the triangle's vertices
     std::vector<Vec4*> vertices = { &v0, &v1, &v2 };
 
     // Clip against all six frustum planes
     for (int plane = NEAR_PLANE; plane <= TOP_PLANE; ++plane) {
         vertices = clip_against_plane(vertices, static_cast<FrustumPlane>(plane));
-		cout << "Plane: " << plane << endl;
-		cout << "Vertices: " << endl;
-		for (int i = 0; i < vertices.size(); i++) {
-			cout << "Vertex " << i << ": " << *vertices[i] << endl;
-		}
-		cout << "--------------------------" << endl;
+		// cout << "Plane: " << plane << endl;
+		// cout << "Vertices: " << endl;
+		// for (int i = 0; i < vertices.size(); i++) {
+		// 	cout << "Vertex " << i << ": " << *vertices[i] << endl;
+		// }
+		// cout << "--------------------------" << endl;
         if (vertices.size() < 3) {
             // If less than 3 vertices remain, the triangle is fully clipped
             return {};
@@ -899,9 +897,9 @@ std::vector<Vec4*> Scene::clip_triangle(Mesh& mesh, Triangle& triangle) {
 
     }
 
-	for (int i = 0; i < vertices.size(); i++) {
-		cout << "New Vertex " << i << ": " << *vertices[i] << endl;
-	}
+	// for (int i = 0; i < vertices.size(); i++) {
+	// 	cout << "New Vertex " << i << ": " << *vertices[i] << endl;
+	// }
 
     return vertices;
 }
@@ -943,8 +941,8 @@ void Scene::clip_wireframe_mesh(Mesh& mesh) {
 		cout << "Triangle " << i << ": " << clipped_triangles[i] << endl;
 	}
 
-	mesh.world_triangles = clipped_triangles;
-	mesh.projected_vertices = clipped_vertices;
+	mesh.clipped_triangles = clipped_triangles;
+	mesh.clipped_vertices = clipped_vertices;
 
 	
 
@@ -991,6 +989,12 @@ void Scene::render() {
                 cout << "    Clipping wireframe mesh..." << endl;
                 clip_wireframe_mesh(*mesh); // Adjusted position
             }
+			else
+			{
+				cout << "	Not Clipping..." << endl;
+				mesh->clipped_triangles = mesh->world_triangles;
+				mesh->clipped_vertices = mesh->projected_vertices;
+			}
 
 			cout << "	Perspective dividing..." << endl;
 			perspective_divide(*mesh);
@@ -1003,7 +1007,6 @@ void Scene::render() {
 
 			cout << "	Rasterizing..." << endl;
 			rasterize(*camera, *mesh);
-			break;
 		}
 
 		myWriteImageToPPMFile(cameras[i]);
