@@ -20,6 +20,8 @@
 
 #define BUFFER_OFFSET(i) ((char*)NULL + (i))
 
+#include "Cube.cpp"
+
 using namespace std;
 
 #include <vector>
@@ -27,114 +29,7 @@ using namespace std;
 #include <GL/glew.h>
 #include <glm/glm.hpp>
 
-class Cube {
-public:
-    GLuint vao;
-    int gTriangleIndexDataSizeInBytes;
-    Cube() {
-    }
 
-    void init(GLuint& vertexBuffer, GLuint& indexBuffer) {
-        glGenVertexArrays(1, &vao);
-        assert(vao > 0);
-        glBindVertexArray(vao);
-
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);
-        assert(glGetError() == GL_NONE);
-
-        glGenBuffers(1, &vertexBuffer);
-        glGenBuffers(1, &indexBuffer);
-
-        assert(vertexBuffer > 0 && indexBuffer > 0);
-
-        glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
-
-        GLuint indices[] = {
-            0, 1, 2, // front
-            3, 0, 2, // front
-            4, 7, 6, // back
-            5, 4, 6, // back
-            0, 3, 4, // left
-            3, 7, 4, // left
-            2, 1, 5, // right
-            6, 2, 5, // right
-            3, 2, 7, // top
-            2, 6, 7, // top
-            0, 4, 1, // bottom
-            4, 5, 1  // bottom
-        };
-
-        GLuint indicesLines[] = {
-            7, 3, 2, 6, // top
-            4, 5, 1, 0, // bottom
-            2, 1, 5, 6, // right
-            5, 4, 7, 6, // back
-            0, 1, 2, 3, // front
-            0, 3, 7, 4, // left
-        };
-
-        GLfloat vertexPos[] = {
-            0, 0, 1, // 0: bottom-left-front
-            1, 0, 1, // 1: bottom-right-front
-            1, 1, 1, // 2: top-right-front
-            0, 1, 1, // 3: top-left-front
-            0, 0, 0, // 0: bottom-left-back
-            1, 0, 0, // 1: bottom-right-back
-            1, 1, 0, // 2: top-right-back
-            0, 1, 0, // 3: top-left-back
-        };
-
-        GLfloat vertexNor[] = {
-            1.0,  1.0,  1.0, // 0: unused
-            0.0, -1.0,  0.0, // 1: bottom
-            0.0,  0.0,  1.0, // 2: front
-            1.0,  1.0,  1.0, // 3: unused
-            -1.0,  0.0,  0.0, // 4: left
-            1.0,  0.0,  0.0, // 5: right
-            0.0,  0.0, -1.0, // 6: back 
-            0.0,  1.0,  0.0, // 7: top
-        };
-
-        int gVertexDataSizeInBytes = sizeof(vertexPos);
-        int gNormalDataSizeInBytes = sizeof(vertexNor);
-        gTriangleIndexDataSizeInBytes = sizeof(indices);
-        int gLineIndexDataSizeInBytes = sizeof(indicesLines);
-        int allIndexSize = gTriangleIndexDataSizeInBytes + gLineIndexDataSizeInBytes;
-
-        glBufferData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes + gNormalDataSizeInBytes, 0, GL_STATIC_DRAW);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, gVertexDataSizeInBytes, vertexPos);
-        glBufferSubData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes, gNormalDataSizeInBytes, vertexNor);
-
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, allIndexSize, 0, GL_STATIC_DRAW);
-        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, gTriangleIndexDataSizeInBytes, indices);
-        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, gTriangleIndexDataSizeInBytes, gLineIndexDataSizeInBytes, indicesLines);
-
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
-    }
-
-    void draw(GLuint& program) {
-        glUseProgram(program);
-        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-    }
-
-    void drawEdges(GLuint& program) {
-        glLineWidth(3);
-
-        glUseProgram(program);
-
-        for (int i = 0; i < 6; ++i)
-        {
-            glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, BUFFER_OFFSET(gTriangleIndexDataSizeInBytes + i * 4 * sizeof(GLuint)));
-        }
-    }
-
-    // ~Cube() {
-    //     glDeleteVertexArrays(1, &vao);
-    // }
-};
 
 class Renderer{
 
@@ -143,8 +38,6 @@ class Renderer{
         int gWidth = 600, gHeight = 1000;
         GLuint gVertexAttribBuffer, gTextVBO, gIndexBuffer;
         GLuint gTex2D;
-        // int gVertexDataSizeInBytes, gNormalDataSizeInBytes;
-        // int gTriangleIndexDataSizeInBytes, gLineIndexDataSizeInBytes;
 
         GLint modelingMatrixLoc[2];
         GLint viewingMatrixLoc[2];
@@ -155,7 +48,6 @@ class Renderer{
 
         glm::mat4 projectionMatrix;
         glm::mat4 viewingMatrix;
-        glm::mat4 modelingMatrix = glm::translate(glm::mat4(1.f), glm::vec3(-0.5, -5.5, -0.5));
         glm::vec3 eyePos = glm::vec3(0, 0, 24);
         glm::vec3 lightPos = glm::vec3(0, 0, 7);
 
@@ -173,8 +65,8 @@ class Renderer{
 
         std::map<GLchar, Character> Characters;
 
-        Cube* cube = new Cube();
-
+        Cube* cube = new Cube(glm::vec3(-0.5, -5.5, -0.5));
+        Cube* cube2 = new Cube();
 
         bool ReadDataFromFile(
             const string& fileName, ///< [in]  Name of the shader file
@@ -405,7 +297,7 @@ class Renderer{
                 kdLoc[i] = glGetUniformLocation(gProgram[i], "kd");
 
                 glUseProgram(gProgram[i]);
-                glUniformMatrix4fv(modelingMatrixLoc[i], 1, GL_FALSE, glm::value_ptr(modelingMatrix));
+                // glUniformMatrix4fv(modelingMatrixLoc[i], 1, GL_FALSE, glm::value_ptr(modelingMatrix));
                 glUniform3fv(eyePosLoc[i], 1, glm::value_ptr(eyePos));
                 glUniform3fv(lightPosLoc[i], 1, glm::value_ptr(lightPos));
                 glUniform3fv(kdLoc[i], 1, glm::value_ptr(kdCubes));
@@ -415,86 +307,7 @@ class Renderer{
         // VBO setup for drawing a cube and its borders
         void initVBO()
         {
-            cube->init(gVertexAttribBuffer, gIndexBuffer);
-            // GLuint vao;
-            // glGenVertexArrays(1, &vao);
-            // assert(vao > 0);
-            // glBindVertexArray(vao);
-
-            // glEnableVertexAttribArray(0);
-            // glEnableVertexAttribArray(1);
-            // assert(glGetError() == GL_NONE);
-
-            // glGenBuffers(1, &gVertexAttribBuffer);
-            // glGenBuffers(1, &gIndexBuffer);
-
-            // assert(gVertexAttribBuffer > 0 && gIndexBuffer > 0);
-
-            // glBindBuffer(GL_ARRAY_BUFFER, gVertexAttribBuffer);
-            // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gIndexBuffer);
-
-            // GLuint indices[] = {
-            //     0, 1, 2, // front
-            //     3, 0, 2, // front
-            //     4, 7, 6, // back
-            //     5, 4, 6, // back
-            //     0, 3, 4, // left
-            //     3, 7, 4, // left
-            //     2, 1, 5, // right
-            //     6, 2, 5, // right
-            //     3, 2, 7, // top
-            //     2, 6, 7, // top
-            //     0, 4, 1, // bottom
-            //     4, 5, 1  // bottom
-            // };
-
-            // GLuint indicesLines[] = {
-            //     7, 3, 2, 6, // top
-            //     4, 5, 1, 0, // bottom
-            //     2, 1, 5, 6, // right
-            //     5, 4, 7, 6, // back
-            //     0, 1, 2, 3, // front
-            //     0, 3, 7, 4, // left
-            // };
-
-            // GLfloat vertexPos[] = {
-            //     0, 0, 1, // 0: bottom-left-front
-            //     1, 0, 1, // 1: bottom-right-front
-            //     1, 1, 1, // 2: top-right-front
-            //     0, 1, 1, // 3: top-left-front
-            //     0, 0, 0, // 0: bottom-left-back
-            //     1, 0, 0, // 1: bottom-right-back
-            //     1, 1, 0, // 2: top-right-back
-            //     0, 1, 0, // 3: top-left-back
-            // };
-
-            // GLfloat vertexNor[] = {
-            //     1.0,  1.0,  1.0, // 0: unused
-            //     0.0, -1.0,  0.0, // 1: bottom
-            //     0.0,  0.0,  1.0, // 2: front
-            //     1.0,  1.0,  1.0, // 3: unused
-            //     -1.0,  0.0,  0.0, // 4: left
-            //     1.0,  0.0,  0.0, // 5: right
-            //     0.0,  0.0, -1.0, // 6: back 
-            //     0.0,  1.0,  0.0, // 7: top
-            // };
-
-            // gVertexDataSizeInBytes = sizeof(vertexPos);
-            // gNormalDataSizeInBytes = sizeof(vertexNor);
-            // gTriangleIndexDataSizeInBytes = sizeof(indices);
-            // gLineIndexDataSizeInBytes = sizeof(indicesLines);
-            // int allIndexSize = gTriangleIndexDataSizeInBytes + gLineIndexDataSizeInBytes;
-
-            // glBufferData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes + gNormalDataSizeInBytes, 0, GL_STATIC_DRAW);
-            // glBufferSubData(GL_ARRAY_BUFFER, 0, gVertexDataSizeInBytes, vertexPos);
-            // glBufferSubData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes, gNormalDataSizeInBytes, vertexNor);
-
-            // glBufferData(GL_ELEMENT_ARRAY_BUFFER, allIndexSize, 0, GL_STATIC_DRAW);
-            // glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, gTriangleIndexDataSizeInBytes, indices);
-            // glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, gTriangleIndexDataSizeInBytes, gLineIndexDataSizeInBytes, indicesLines);
-
-            // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-            // glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
+            Cube::init(gVertexAttribBuffer, gIndexBuffer);
         }
 
         void init() 
@@ -511,25 +324,32 @@ class Renderer{
             initFonts(gWidth, gHeight);
         }
 
-        void drawCube()
-        {
-            cube->draw(gProgram[0]);
-            // glUseProgram(gProgram[0]);
-            // glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+        void drawCubes() {
+            drawCubeFaces();
+            drawCubeEdges();
+        }
+        void drawCubeFaces() {
+            GLuint program = gProgram[0];
+            glUseProgram(program);
+
+            glUniformMatrix4fv(viewingMatrixLoc[0], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
+            glUniformMatrix4fv(projectionMatrixLoc[0], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+
+            // Draw the cube
+            cube->drawFaces(modelingMatrixLoc[0]);
         }
 
-        void drawCubeEdges()
-        {
-            cube->drawEdges(gProgram[1]);
-            // glLineWidth(3);
+        void drawCubeEdges() {
+            GLuint program = gProgram[1]; // Shader program for edges
+            glUseProgram(program);
 
-            // glUseProgram(gProgram[1]);
+            glUniformMatrix4fv(viewingMatrixLoc[1], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
+            glUniformMatrix4fv(projectionMatrixLoc[1], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
-            // for (int i = 0; i < 6; ++i)
-            // {
-            //     glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, BUFFER_OFFSET(gTriangleIndexDataSizeInBytes + i * 4 * sizeof(GLuint)));
-            // }
+            // Draw the edges
+            cube->drawEdges(modelingMatrixLoc[1]);
         }
+
 
         void renderText(const std::string& text, GLfloat x, GLfloat y, GLfloat scale, glm::vec3 color)
         {
@@ -581,19 +401,19 @@ class Renderer{
         }
 
 
-        void display()
-        {
+
+
+        void display() {
             glClearColor(0, 0, 0, 1);
-            glClearDepth(1.0f);
-            glClearStencil(0);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-            drawCube();
-            drawCubeEdges();
-            renderText("tetrisGL", gWidth/2 - 55, gHeight/2 - 60, 0.75, glm::vec3(1, 1, 0));
+            drawCubes();
+
+            renderText("tetrisGL", gWidth / 2 - 55, gHeight / 2 - 60, 0.75, glm::vec3(1, 1, 0));
 
             assert(glGetError() == GL_NO_ERROR);
         }
+
 
         void reshape(GLFWwindow* window, int w, int h)
         {
