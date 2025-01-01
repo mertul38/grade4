@@ -86,9 +86,13 @@ class Game{
             currTetBlock,
         };
         float groundY = -10.0f;
-        GroundBlock* groundBlock = new GroundBlock(glm::vec3(0, groundY, 0));
+        GroundBlock* groundBlock = new GroundBlock(glm::vec3(0, groundY+0.5, 0));
         int playStep = 0;
-        int totalPlaySteps = 50;
+        int totalPlaySteps = 100;
+        int minPlayStep = 10;
+        int maxPlayStep = 100;
+        int percPlayStep;
+        bool pause = true;
 
         int topY = 8;
 
@@ -140,7 +144,7 @@ class Game{
             string filename(shaderName);
             if (!ReadDataFromFile(filename, shaderSource))
             {
-                cout << "Cannot find file name: " + filename << endl;
+                // cout << "Cannot find file name: " + filename << endl;
                 exit(-1);
             }
 
@@ -165,7 +169,7 @@ class Game{
             string filename(shaderName);
             if (!ReadDataFromFile(filename, shaderSource))
             {
-                cout << "Cannot find file name: " + filename << endl;
+                // cout << "Cannot find file name: " + filename << endl;
                 exit(-1);
             }
 
@@ -221,7 +225,7 @@ class Game{
 
                 if (status != GL_TRUE)
                 {
-                    cout << "Program link failed: " << i << endl;
+                    // cout << "Program link failed: " << i << endl;
                     exit(-1);
                 }
             }
@@ -349,6 +353,7 @@ class Game{
             glPolygonOffset(0.5, 0.5);
             glEnable(GL_POLYGON_OFFSET_FILL);
 
+            calculatePercPlayStep();
             initShaders();
             initVBO();
             initFonts(gWidth, gHeight);
@@ -447,9 +452,14 @@ class Game{
             drawCubeFaces();
             drawCubeEdges();
             renderText(eyePositions[eyePositionIndex], 10, gHeight - 50, 0.75, glm::vec3(1, 1, 0));
-            renderText("Points: "+to_string(score), gWidth - 180, gHeight - 50, 0.75, glm::vec3(1, 1, 0));
+            renderText("Points: "+to_string(score), gWidth - 270, gHeight - 50, 0.75, glm::vec3(1, 1, 0));
+            renderText("Play Speed: "+to_string(100 - percPlayStep), gWidth - 270, gHeight - 84, 0.75, glm::vec3(1, 0.6, 0));
+            if(pause){
+                renderText("Paused", gWidth/2 - 55, gHeight/2 - 40, 0.8, glm::vec3(0.9, 0.9, 0));
+                renderText("Press S to unpause", gWidth/2 - 150, gHeight/2 - 74, 0.8, glm::vec3(0.9, 0.9, 0));
+            }
             if(gameOver) {
-                renderText("Game Over", gWidth/2 - 55, gHeight/2 - 60, 1, glm::vec3(1, 1, 0));
+                renderText("Game Over", gWidth/2 - 85, gHeight/2 - 60, 1, glm::vec3(1, 0, 0.2));
             }
 
             assert(glGetError() == GL_NO_ERROR);
@@ -522,6 +532,9 @@ class Game{
             }
         }
 
+        void calculatePercPlayStep() {
+            percPlayStep = (int)(((float)(totalPlaySteps - minPlayStep) / (float)(maxPlayStep - minPlayStep)) * 100);
+        }
 
         bool checkCollision(Cube::MoveDirection moveDirection) {
             Cube& currCenterCube = currTetBlock->getCenterCube();
@@ -595,12 +608,12 @@ class Game{
             }
             if ((key == GLFW_KEY_D) && action == GLFW_PRESS) {
                 bool isCollision = checkCollision(Cube::MoveDirection::Right);
-                cout << "isCollision: " << isCollision << endl;
+                // cout << "isCollision: " << isCollision << endl;
                 if (!isCollision) {
                     auto moveVector = currTetBlock->getCenterCube().getMoveVector(Cube::MoveDirection::Right, stableEyePos);
                     currTetBlock->move(moveVector);
                     auto currPosition = currTetBlock->getPosition();
-                    cout << "currPosition: " << currPosition.x << ", " << currPosition.y << ", " << currPosition.z << endl;
+                    // cout << "currPosition: " << currPosition.x << ", " << currPosition.y << ", " << currPosition.z << endl;
                 }
             }
             if ((key == GLFW_KEY_H || key == GLFW_KEY_K) && action == GLFW_PRESS && !isEyePosRotating) {
@@ -609,32 +622,38 @@ class Game{
                 if (key == GLFW_KEY_H){
                     eyePosRotationDirection = AngleDirection::Left;
                     eyePositionIndex = (eyePositionIndex - 1 + 4) % 4;
-                    cout << "eyePositionIndex: " << eyePositionIndex << endl;
+                    // cout << "eyePositionIndex: " << eyePositionIndex << endl;
                     stableEyePos = rotatePos(stableEyePos, (float)-totalEyePosRotationSteps);
                 }
                 else{
                     eyePosRotationDirection = AngleDirection::Right;
                     eyePositionIndex = (eyePositionIndex + 1 + 4) % 4;
-                    cout << "eyePositionIndex: " << eyePositionIndex << endl;
+                    // cout << "eyePositionIndex: " << eyePositionIndex << endl;
                     stableEyePos = rotatePos(stableEyePos, (float)totalEyePosRotationSteps);
                 } 
             }
             if ((key == GLFW_KEY_W) && action == GLFW_PRESS) {
-                if (totalPlaySteps <= 100) {
+                if (totalPlaySteps < maxPlayStep) {
                     totalPlaySteps += 10;
+                    calculatePercPlayStep();
+                }
+                else{
+                    pause = true;       
                 }
             }
             if ((key == GLFW_KEY_S) && action == GLFW_PRESS) {
-                if (totalPlaySteps >= 20) {
+                if (totalPlaySteps > minPlayStep) {
+                    pause = false;
                     totalPlaySteps -= 10;
+                    calculatePercPlayStep();    
                 }
             }
         }
 
-        bool checkGroundCollision(Cube::MoveDirection moveDirection) {
-            Cube& currCenterCube = currTetBlock->getCenterCube();
-            glm::vec3 currMoveVector = currCenterCube.getMoveVector(moveDirection, stableEyePos);
-            glm::mat4 proposalMatrix = currCenterCube.getProposalModelMatrix(currMoveVector);
+        bool checkGroundCollision(TetBlock* tetBlock, Cube::MoveDirection moveDirection) {
+            Cube& centerCube = tetBlock->getCenterCube();
+            glm::vec3 moveVector = centerCube.getMoveVector(moveDirection, stableEyePos);
+            glm::mat4 proposalMatrix = centerCube.getProposalModelMatrix(moveVector);
             glm::vec3 proposalPosition = Cube::modelToPosition(proposalMatrix);
             
             // Calculate bounds for the proposal cube
@@ -653,7 +672,7 @@ class Game{
 
         void gameStep(){
             bool isCollision = checkCollision(Cube::MoveDirection::Down);
-            bool isGroundCollision = checkGroundCollision(Cube::MoveDirection::Down);
+            bool isGroundCollision = checkGroundCollision(currTetBlock, Cube::MoveDirection::Down);
             if (!isCollision && !isGroundCollision) {
                 auto moveVector = currTetBlock->getCenterCube().getMoveVector(Cube::MoveDirection::Down, stableEyePos);
                 currTetBlock->move(moveVector);
@@ -662,9 +681,9 @@ class Game{
                 if(isGroundCollision){
                     currTetBlock->landed = true;
                     currTetBlock->on_ground = true;
-                    cout << "landed on ground" << endl;
+                    // cout << "landed on ground" << endl;
                     auto position = currTetBlock->getPosition();
-                    cout << "position: " << position.x << ", " << position.y << ", " << position.z << endl;
+                    // cout << "position: " << position.x << ", " << position.y << ", " << position.z << endl;
                     for(int i=position.x - 1; i <= position.x + 1; i++){
                         for(int j=position.z - 1; j <= position.z + 1; j++){
                             groundedPositions[i+4][j+4] = true;
@@ -689,18 +708,43 @@ class Game{
                                 groundedPositions[i][j] = false;
                             }
                         }
-                        cout << "allTrue" << endl;
+                        // cout << "allTrue" << endl;
                         score += 243;
-                        allTetBlocks.clear();
-
+                        for (int i=0; i<allTetBlocks.size(); i++){
+                            auto tetBlock = allTetBlocks[i];
+                            if (tetBlock->on_ground){
+                                allTetBlocks.erase(allTetBlocks.begin() + i);
+                                i--;
+                            }
+                            else
+                            {
+                                for (int j=0; j<3; j++){
+                                    auto moveVector = tetBlock->getCenterCube().getMoveVector(Cube::MoveDirection::Down, stableEyePos);
+                                    tetBlock->move(moveVector);
+                                }
+                                bool isGroundCollision2 = checkGroundCollision(tetBlock, Cube::MoveDirection::Down);
+                                if (isGroundCollision2){
+                                    tetBlock->landed = true;
+                                    tetBlock->on_ground = true;
+                                    // cout << "landed on ground" << endl;
+                                    auto position = tetBlock->getPosition();
+                                    // cout << "position: " << position.x << ", " << position.y << ", " << position.z << endl;
+                                    for(int i=position.x - 1; i <= position.x + 1; i++){
+                                        for(int j=position.z - 1; j <= position.z + 1; j++){
+                                            groundedPositions[i+4][j+4] = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 else{
                     currTetBlock->landed = false;
-                    cout << "landed on block" << endl;
+                    // cout << "landed on block" << endl;
                     auto position = currTetBlock->getPosition();
                     if ((position.y + 1) >= topY) {
-                        cout << "GAME OVER" << endl;
+                        // cout << "GAME OVER" << endl;
                         gameOver = true;
                         return;
                     }
@@ -717,7 +761,7 @@ class Game{
                     rotateEyePos();
                 }
                 
-                if (!gameOver) {
+                if (!gameOver && !pause) {
                     if (playStep < totalPlaySteps) {
                         playStep++;
                     }
@@ -759,7 +803,7 @@ class Game{
             // Initialize GLEW to setup the OpenGL Function pointers
             if (GLEW_OK != glewInit())
             {
-                std::cout << "Failed to initialize GLEW" << std::endl;
+                // std::cout << "Failed to initialize GLEW" << std::endl;
                 return EXIT_FAILURE;
             }
 
