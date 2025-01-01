@@ -72,13 +72,14 @@ class Renderer{
         glm::vec3 kdCubes{0.86, 0.11, 0.31};
 
         // --- Game ---
-        TetBlock* currTetBlock = new TetBlock(glm::vec3(0, 2, 0));
+        TetBlock* currTetBlock = new TetBlock(glm::vec3(0, 5, 0));
 
         vector<TetBlock*> allTetBlocks = {
             currTetBlock,
-            new TetBlock(glm::vec3(4, 2, 0)),
+            new TetBlock(glm::vec3(0, -1, 0)),
         };
-        GroundBlock* groundBlock = new GroundBlock(glm::vec3(0, -3, 0));
+        float groundY = -3.0f;
+        GroundBlock* groundBlock = new GroundBlock(glm::vec3(0, groundY, 0));
         
         int playStep = 0;
         int totalPlaySteps = 90;
@@ -353,7 +354,6 @@ class Renderer{
             if (proposalMinX < -4.0f || proposalMaxX > 4.0f ||
                 proposalMinZ < -4.0f || proposalMaxZ > 4.0f) {
                 // Collision with the game frame
-                std::cout << "Collision detected with game frame bounds" << std::endl;
                 return true;
             }
 
@@ -381,17 +381,16 @@ class Renderer{
 
                     if (overlapX && overlapY && overlapZ) {
                         // Collision detected
-                        std::cout << "Collision detected with block at position: "
-                                << cubePosition.x << ", "
-                                << cubePosition.y << ", "
-                                << cubePosition.z << std::endl;
+                        // std::cout << "Collision detected with block at position: "
+                        //         << cubePosition.x << ", "
+                        //         << cubePosition.y << ", "
+                        //         << cubePosition.z << std::endl;
                         return true;
                     }
                 }
             }
 
             // No collision detected
-            std::cout << "No collision" << std::endl;
             return false;
         }
 
@@ -402,12 +401,10 @@ class Renderer{
             }
             if ((key == GLFW_KEY_A) && action == GLFW_PRESS) {
                 bool isCollision = checkCollision(Cube::MoveDirection::Left);
-                cout << "isCollision: " << isCollision << endl;
                 if (!isCollision) {
                     auto moveVector = currTetBlock->getCenterCube().getMoveVector(Cube::MoveDirection::Left, stableEyePos);
                     currTetBlock->move(moveVector);
                     auto currPosition = currTetBlock->getPosition();
-                    cout << "currPosition: " << currPosition.x << ", " << currPosition.y << ", " << currPosition.z << endl;
                 }
             }
             if ((key == GLFW_KEY_D) && action == GLFW_PRESS) {
@@ -434,6 +431,26 @@ class Renderer{
             }
         }
 
+        bool checkGroundCollision(Cube::MoveDirection moveDirection) {
+            Cube& currCenterCube = currTetBlock->getCenterCube();
+            glm::vec3 currMoveVector = currCenterCube.getMoveVector(moveDirection, stableEyePos);
+            glm::mat4 proposalMatrix = currCenterCube.getProposalModelMatrix(currMoveVector);
+            glm::vec3 proposalPosition = Cube::modelToPosition(proposalMatrix);
+            
+            // Calculate bounds for the proposal cube
+            float proposalMinX = proposalPosition.x - 1.0f;
+            float proposalMaxX = proposalPosition.x + 1.0f;
+            float proposalMinY = proposalPosition.y - 1.0f;
+            float proposalMaxY = proposalPosition.y + 1.0f;
+            float proposalMinZ = proposalPosition.z - 1.0f;
+            float proposalMaxZ = proposalPosition.z + 1.0f;
+
+            if (proposalMinY == groundY) {
+                return true;
+            }
+            return false;
+        }
+
         void rotateEyePos() {
             if (isEyePosRotating && eyePosRotationStep < totalEyePosRotationSteps) {
                 eyePosUpdate(eyePosRotationDirection);
@@ -445,7 +462,26 @@ class Renderer{
         }
 
         void gameStep(){
-            
+            bool isCollision = checkCollision(Cube::MoveDirection::Down);
+            bool isGroundCollision = checkGroundCollision(Cube::MoveDirection::Down);
+            if (!isCollision && !isGroundCollision) {
+                auto moveVector = currTetBlock->getCenterCube().getMoveVector(Cube::MoveDirection::Down, stableEyePos);
+                currTetBlock->move(moveVector);
+            }
+            else{
+                if(isGroundCollision){
+                    currTetBlock->landed = true;
+                    currTetBlock->on_ground = true;
+                    cout << "landed on ground" << endl;
+                }
+                else{
+                    currTetBlock->landed = false;
+                    cout << "landed on block" << endl;
+                }
+                currTetBlock = new TetBlock(glm::vec3(0, 12, 0));
+                allTetBlocks.push_back(currTetBlock);
+            }
+
         }
 
         void mainLoop(GLFWwindow* window) {

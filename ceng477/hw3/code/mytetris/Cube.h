@@ -9,7 +9,6 @@ class Cube {
 public:
     enum MoveDirection{ Left, Right, Down};
 
-    bool landed = false;
     static GLuint vao;
     static GLint modelingMatrixLoc_face;
     static GLint modelingMatrixLoc_edge;

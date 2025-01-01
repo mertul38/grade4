@@ -7,6 +7,8 @@
 
 class TetBlock {
 public:
+    bool landed = false;
+    bool on_ground = false;
     std::vector<Cube> cubes;
 
     TetBlock(glm::vec3 position) {
