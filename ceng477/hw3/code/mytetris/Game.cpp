@@ -41,7 +41,7 @@ using namespace std;
 
 class Game{
     public:
-
+        GLuint cubeVao, cuboidVao;
         // BufferOffsets bufferOffsets;
         // Define the shader programs
         GLuint gProgram[3];
@@ -334,8 +334,9 @@ class Game{
         {
             Cube::modelingMatrixLoc_face = modelingMatrixLoc[0];
             Cube::modelingMatrixLoc_edge = modelingMatrixLoc[1];
-            Cube::init(cubeVertexBuffer, cubeIndexBuffer);
-            // Cuboid::init(cuboidVertexBuffer, cuboidIndexBuffer, 0.6f);
+            
+            Cube::init(cubeVao, cubeVertexBuffer, cubeIndexBuffer);
+            Cuboid::init(cuboidVao, cuboidVertexBuffer, cuboidIndexBuffer, 0.6f);
 
         }
 
@@ -411,10 +412,13 @@ class Game{
             glUniformMatrix4fv(projectionMatrixLoc[0], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
             glUniform3fv(kdLoc[0], 1, glm::value_ptr(kdCubes));
+
+            glBindVertexArray(cubeVao);
             for (int i = 0; i < allTetBlocks.size(); i++) {
                 allTetBlocks[i]->drawFaces();
             }
 
+            glBindVertexArray(cuboidVao);
             glUniform3fv(kdLoc[0], 1, glm::value_ptr(kdGround));
             groundBlock->drawFaces();
         }
@@ -426,9 +430,11 @@ class Game{
             glUniformMatrix4fv(viewingMatrixLoc[1], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
             glUniformMatrix4fv(projectionMatrixLoc[1], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
+            glBindVertexArray(cubeVao);
             for(int i = 0; i < allTetBlocks.size(); i++) {
                 allTetBlocks[i]->drawEdges();
             }
+            glBindVertexArray(cuboidVao);
             groundBlock->drawEdges();
             // Draw the edges
             // gameElements.drawGameElementsEdges();

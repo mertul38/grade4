@@ -21,12 +21,15 @@ using namespace std;
 
 #define EPSILON 0.0001
 
-GLuint Cube::vao = 0;
 GLint Cube::modelingMatrixLoc_face = 0;
 GLint Cube::modelingMatrixLoc_edge = 0;
-int Cube::gTriangleIndexDataSizeInBytes = 0;
 
-void Cube::init(GLuint& vertexBuffer, GLuint& indexBuffer) {
+int Cube::cubeVertexDataSize = 0;
+int Cube::cubeNormalDataSize = 0;
+int Cube::cubeIndexDataSize = 0;
+int Cube::cubeLineIndexDataSize = 0;
+
+void Cube::init(GLuint& vao, GLuint& vertexBuffer, GLuint& indexBuffer) {
     glGenVertexArrays(1, &vao);
     assert(vao > 0);
     glBindVertexArray(vao);
@@ -59,22 +62,21 @@ void Cube::init(GLuint& vertexBuffer, GLuint& indexBuffer) {
         1.0, 1.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0
     };
 
-    int gVertexDataSizeInBytes = sizeof(vertexPos);
-    int gNormalDataSizeInBytes = sizeof(vertexNor);
-    gTriangleIndexDataSizeInBytes = sizeof(indices);
-    int gLineIndexDataSizeInBytes = sizeof(indicesLines);
-    int allIndexSize = gTriangleIndexDataSizeInBytes + gLineIndexDataSizeInBytes;
+    cubeVertexDataSize = sizeof(vertexPos);
+    cubeNormalDataSize = sizeof(vertexNor);
+    cubeIndexDataSize = sizeof(indices);
+    cubeLineIndexDataSize = sizeof(indicesLines);
 
-    glBufferData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes + gNormalDataSizeInBytes, 0, GL_STATIC_DRAW);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, gVertexDataSizeInBytes, vertexPos);
-    glBufferSubData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes, gNormalDataSizeInBytes, vertexNor);
+    glBufferData(GL_ARRAY_BUFFER, cubeVertexDataSize + cubeNormalDataSize, 0, GL_STATIC_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, cubeVertexDataSize, vertexPos);
+    glBufferSubData(GL_ARRAY_BUFFER, cubeVertexDataSize, cubeNormalDataSize, vertexNor);
 
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, allIndexSize, 0, GL_STATIC_DRAW);
-    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, gTriangleIndexDataSizeInBytes, indices);
-    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, gTriangleIndexDataSizeInBytes, gLineIndexDataSizeInBytes, indicesLines);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, cubeIndexDataSize + cubeLineIndexDataSize, 0, GL_STATIC_DRAW);
+    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, cubeIndexDataSize, indices);
+    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, cubeIndexDataSize, cubeLineIndexDataSize, indicesLines);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(cubeVertexDataSize));
 }
 
 glm::vec3 Cube::modelToPosition(const glm::mat4& modelMatrix) {
@@ -96,7 +98,7 @@ void Cube::drawEdges() {
     glLineWidth(3);
     glUniformMatrix4fv(modelingMatrixLoc_edge, 1, GL_FALSE, glm::value_ptr(modelMatrix));
     for (int i = 0; i < 6; ++i) {
-        glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, BUFFER_OFFSET(gTriangleIndexDataSizeInBytes + i * 4 * sizeof(GLuint)));
+        glDrawElements(GL_LINE_LOOP, 4, GL_UNSIGNED_INT, BUFFER_OFFSET(cubeIndexDataSize + i * 4 * sizeof(GLuint)));
     }
 }
 

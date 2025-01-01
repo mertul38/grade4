@@ -14,15 +14,20 @@
 #include "Common.h"
 
 class Cube {
+
 public:
     enum MoveDirection{ Left, Right, Down};
 
-    static GLuint vao;
     static GLint modelingMatrixLoc_face;
     static GLint modelingMatrixLoc_edge;
     static int gTriangleIndexDataSizeInBytes;
 
-    static void init(GLuint& vertexBuffer, GLuint& indexBuffer);
+    static int cubeVertexDataSize;
+    static int cubeNormalDataSize;
+    static int cubeIndexDataSize;
+    static int cubeLineIndexDataSize;
+
+    static void init(GLuint& vao, GLuint& vertexBuffer, GLuint& indexBuffer);
 
     static glm::vec3 modelToPosition(const glm::mat4& modelMatrix);
     
