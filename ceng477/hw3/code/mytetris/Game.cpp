@@ -50,7 +50,7 @@ class Game{
         GLuint cuboidVertexBuffer, cuboidIndexBuffer; // Buffers for Cuboid
         GLuint gTextVBO;
         GLuint gTex2D;
-
+        
         GLint modelingMatrixLoc[2];
         GLint viewingMatrixLoc[2];
         GLint projectionMatrixLoc[2];
@@ -79,9 +79,10 @@ class Game{
         vector<string> eyePositions = {"Front", "Right", "Back", "Left"};
         bool gameOver = false;
         long int score = 0;
+        int topY = 8;
         int eyePositionIndex = 0;
         vector<vector<bool>> groundedPositions = vector<vector<bool>>(9, vector<bool>(9, false));
-        TetBlock* currTetBlock = new TetBlock(glm::vec3(0, 5, 0));
+        TetBlock* currTetBlock = new TetBlock(glm::vec3(0, 7, 0));
         vector<TetBlock*> allTetBlocks = {
             currTetBlock,
         };
@@ -94,7 +95,6 @@ class Game{
         int percPlayStep;
         bool pause = true;
 
-        int topY = 8;
 
         struct Character {
             GLuint TextureID;   // ID handle of the glyph texture
@@ -190,13 +190,11 @@ class Game{
         void initShaders()
         {
             // Create the programs
-
             gProgram[0] = glCreateProgram();
             gProgram[1] = glCreateProgram();
             gProgram[2] = glCreateProgram();
 
             // Create the shaders for both programs
-
             GLuint vs1 = createVS("vert.glsl"); // for cube shading
             GLuint fs1 = createFS("frag.glsl");
 
@@ -207,7 +205,6 @@ class Game{
             GLuint fs3 = createFS("frag_text.glsl");
 
             // Attach the shaders to the programs
-
             glAttachShader(gProgram[0], vs1);
             glAttachShader(gProgram[0], fs1);
 
@@ -217,19 +214,23 @@ class Game{
             glAttachShader(gProgram[2], vs3);
             glAttachShader(gProgram[2], fs3);
 
+            // Link programs
             for (int i = 0; i < 3; ++i)
             {
                 glLinkProgram(gProgram[i]);
                 GLint status;
                 glGetProgramiv(gProgram[i], GL_LINK_STATUS, &status);
-
                 if (status != GL_TRUE)
                 {
-                    // cout << "Program link failed: " << i << endl;
+                    // Handle linking error here, for example:
+                    char log[512];
+                    glGetProgramInfoLog(gProgram[i], sizeof(log), NULL, log);
+                    std::cerr << "Error linking shader program: " << log << std::endl;
                     exit(-1);
                 }
             }
 
+            // Set up uniform locations for the first two shader programs
             for (int i = 0; i < 2; ++i)
             {
                 modelingMatrixLoc[i] = glGetUniformLocation(gProgram[i], "modelingMatrix");
@@ -239,11 +240,22 @@ class Game{
                 lightPosLoc[i] = glGetUniformLocation(gProgram[i], "lightPos");
                 kdLoc[i] = glGetUniformLocation(gProgram[i], "kd");
 
+                // Use the program to set uniforms
                 glUseProgram(gProgram[i]);
                 glUniform3fv(eyePosLoc[i], 1, glm::value_ptr(eyePos));
                 glUniform3fv(lightPosLoc[i], 1, glm::value_ptr(lightPos));
+
+                // Additional ambient light setup
+                GLint ambientIntensityLoc = glGetUniformLocation(gProgram[i], "Iamb");
+                GLint ambientCoefficientLoc = glGetUniformLocation(gProgram[i], "ka");
+                glm::vec3 ambientIntensity = glm::vec3(0.1f, 0.1f, 0.1f);  // Ambient light intensity
+                glm::vec3 ambientCoefficient = glm::vec3(0.1f, 0.1f, 0.1f);  // Ambient reflectance coefficient
+
+                glUniform3fv(ambientIntensityLoc, 1, glm::value_ptr(ambientIntensity));
+                glUniform3fv(ambientCoefficientLoc, 1, glm::value_ptr(ambientCoefficient));
             }
         }
+
         
         void initFonts(int windowWidth, int windowHeight)
         {

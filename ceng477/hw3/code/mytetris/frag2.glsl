@@ -40,5 +40,5 @@ void main(void)
 	vec3 ambientColor = Iamb * ka;
 
 	//fragColor = vec4(diffuseColor + specularColor + ambientColor, 1);
-	fragColor = vec4(1, 1, 1, 1);
+	fragColor = vec4(0.7, 0.7, 0.7, 0.7);
 }
