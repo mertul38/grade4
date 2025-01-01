@@ -23,7 +23,7 @@
 
 #define BUFFER_OFFSET(i) ((char*)NULL + (i))
 
-#include "Renderer.cpp"
+#include "Game.cpp"
 // #include "TetBlock.cpp"
 
 using namespace std;
@@ -35,7 +35,8 @@ using namespace std;
 
 int main(int argc, char** argv)
 {
-    Renderer renderer = Renderer();
+    Game game = Game();
+    game.run();
 
-    return renderer.run();
+    return 0;
 }

@@ -2,8 +2,16 @@
 #define CUBE_H
 
 #include <GL/glew.h>
-#include <glm/glm.hpp>
+#include <GLFW/glfw3.h> // The GLFW header
+#include <glm/glm.hpp> // GL Math library header
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
+#define BUFFER_OFFSET(i) ((char*)NULL + (i))
+
+#include "Common.h"
 
 class Cube {
 public:

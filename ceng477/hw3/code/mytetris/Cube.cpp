@@ -8,15 +8,8 @@
 #include <vector>
 #include <map>
 #include <math.h>
-#include <GL/glew.h>
-#include <GLFW/glfw3.h> // The GLFW header
-#include <glm/glm.hpp> // GL Math library header
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <ft2build.h>
-#include FT_FREETYPE_H
 
-#define BUFFER_OFFSET(i) ((char*)NULL + (i))
+
 
 using namespace std;
 

@@ -24,8 +24,10 @@
 #define BUFFER_OFFSET(i) ((char*)NULL + (i))
 
 #include "Cube.h"
-#include "TetBlock.cpp"
-#include "GroundBlock.cpp"
+#include "Cuboid.h"
+#include "TetBlock.h"
+#include "GroundBlock.h"
+#include "Common.h"
 // #include "TetBlock.cpp"
 
 using namespace std;
@@ -37,14 +39,17 @@ using namespace std;
 
 
 
-class Renderer{
-
+class Game{
     public:
 
+        // BufferOffsets bufferOffsets;
         // Define the shader programs
         GLuint gProgram[3];
         int gWidth = 600, gHeight = 1000;
-        GLuint gVertexAttribBuffer, gIndexBuffer;
+        GLuint cubeVertexBuffer, cubeIndexBuffer;
+        GLuint cuboidVertexBuffer, cuboidIndexBuffer; // Buffers for Cuboid
+        GLuint gTextVBO;
+        GLuint gTex2D;
 
         GLint modelingMatrixLoc[2];
         GLint viewingMatrixLoc[2];
@@ -62,28 +67,39 @@ class Renderer{
         AngleDirection eyePosRotationDirection = AngleDirection::Left;
         int eyePosRotationStep = 0;
         const int totalEyePosRotationSteps = 90;  // Total steps for full rotation
-        float eyeDistance = 30;
-
+        float eyeDistance = 35;
         glm::vec3 stableEyePos = glm::vec3(0, 0, eyeDistance);  // Initialize with the starting eye position
         glm::vec3 eyePos = glm::vec3(0, 0, eyeDistance);
         glm::vec3 lightPos = glm::vec3(0, 0, 7);
 
-        glm::vec3 kdGround{0.334, 0.288, 0.635}; // this is the ground color in the demo
-        glm::vec3 kdCubes{0.86, 0.11, 0.31};
+        glm::vec3 kdGround{0.78, 0.2, 0.3}; // this is the ground color in the demo
+        glm::vec3 kdCubes{0.45, 0.81, 0.31};
 
         // --- Game ---
+        vector<string> eyePositions = {"Front", "Right", "Back", "Left"};
+        bool gameOver = false;
+        long int score = 0;
+        int eyePositionIndex = 0;
         vector<vector<bool>> groundedPositions = vector<vector<bool>>(9, vector<bool>(9, false));
-
         TetBlock* currTetBlock = new TetBlock(glm::vec3(0, 5, 0));
-
         vector<TetBlock*> allTetBlocks = {
             currTetBlock,
         };
-        float groundY = -7.0f;
+        float groundY = -10.0f;
         GroundBlock* groundBlock = new GroundBlock(glm::vec3(0, groundY, 0));
-        
         int playStep = 0;
         int totalPlaySteps = 50;
+
+        int topY = 8;
+
+        struct Character {
+            GLuint TextureID;   // ID handle of the glyph texture
+            glm::ivec2 Size;    // Size of glyph
+            glm::ivec2 Bearing;  // Offset from baseline to left/top of glyph
+            GLuint Advance;    // Horizontal offset to advance to next glyph
+        };
+
+        std::map<GLchar, Character> Characters;
 
         bool ReadDataFromFile(
             const string& fileName, ///< [in]  Name of the shader file
@@ -224,12 +240,103 @@ class Renderer{
                 glUniform3fv(lightPosLoc[i], 1, glm::value_ptr(lightPos));
             }
         }
+        
+        void initFonts(int windowWidth, int windowHeight)
+        {
+            // Set OpenGL options
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            glm::mat4 projection = glm::ortho(0.0f, static_cast<GLfloat>(windowWidth), 0.0f, static_cast<GLfloat>(windowHeight));
+            glUseProgram(gProgram[2]);
+            glUniformMatrix4fv(glGetUniformLocation(gProgram[2], "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+            // FreeType
+            FT_Library ft;
+            // All functions return a value different than 0 whenever an error occurred
+            if (FT_Init_FreeType(&ft))
+            {
+                std::cout << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
+            }
+
+            // Load font as face
+            FT_Face face;
+            if (FT_New_Face(ft, "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", 0, &face))
+            //if (FT_New_Face(ft, "/usr/share/fonts/truetype/gentium-basic/GenBkBasR.ttf", 0, &face)) // you can use different fonts
+            {
+                std::cout << "ERROR::FREETYPE: Failed to load font" << std::endl;
+            }
+
+            // Set size to load glyphs as
+            FT_Set_Pixel_Sizes(face, 0, 48);
+
+            // Disable byte-alignment restriction
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1); 
+
+            // Load first 128 characters of ASCII set
+            for (GLubyte c = 0; c < 128; c++)
+            {
+                // Load character glyph 
+                if (FT_Load_Char(face, c, FT_LOAD_RENDER))
+                {
+                    std::cout << "ERROR::FREETYTPE: Failed to load Glyph" << std::endl;
+                    continue;
+                }
+                // Generate texture
+                GLuint texture;
+                glGenTextures(1, &texture);
+                glBindTexture(GL_TEXTURE_2D, texture);
+                glTexImage2D(
+                        GL_TEXTURE_2D,
+                        0,
+                        GL_RED,
+                        face->glyph->bitmap.width,
+                        face->glyph->bitmap.rows,
+                        0,
+                        GL_RED,
+                        GL_UNSIGNED_BYTE,
+                        face->glyph->bitmap.buffer
+                        );
+                // Set texture options
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                // Now store character for later use
+                Character character = {
+                    texture,
+                    glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows),
+                    glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top),
+                    (GLuint) face->glyph->advance.x
+                };
+                Characters.insert(std::pair<GLchar, Character>(c, character));
+            }
+
+            glBindTexture(GL_TEXTURE_2D, 0);
+            // Destroy FreeType once we're finished
+            FT_Done_Face(face);
+            FT_Done_FreeType(ft);
+
+            //
+            // Configure VBO for texture quads
+            //
+            glGenBuffers(1, &gTextVBO);
+            glBindBuffer(GL_ARRAY_BUFFER, gTextVBO);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+
+            glEnableVertexAttribArray(2);
+            glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), 0);
+
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+        }
 
         void initVBO()
         {
             Cube::modelingMatrixLoc_face = modelingMatrixLoc[0];
             Cube::modelingMatrixLoc_edge = modelingMatrixLoc[1];
-            Cube::init(gVertexAttribBuffer, gIndexBuffer);
+            Cube::init(cubeVertexBuffer, cubeIndexBuffer);
+            // Cuboid::init(cuboidVertexBuffer, cuboidIndexBuffer, 0.6f);
+
         }
 
         void init() 
@@ -243,7 +350,58 @@ class Renderer{
 
             initShaders();
             initVBO();
+            initFonts(gWidth, gHeight);
         }
+
+        void renderText(const std::string& text, GLfloat x, GLfloat y, GLfloat scale, glm::vec3 color)
+        {
+            // Activate corresponding render state	
+            glUseProgram(gProgram[2]);
+            glUniform3f(glGetUniformLocation(gProgram[2], "textColor"), color.x, color.y, color.z);
+            glActiveTexture(GL_TEXTURE0);
+
+            // Iterate through all characters
+            std::string::const_iterator c;
+            for (c = text.begin(); c != text.end(); c++) 
+            {
+                Character ch = Characters[*c];
+
+                GLfloat xpos = x + ch.Bearing.x * scale;
+                GLfloat ypos = y - (ch.Size.y - ch.Bearing.y) * scale;
+
+                GLfloat w = ch.Size.x * scale;
+                GLfloat h = ch.Size.y * scale;
+
+                // Update VBO for each character
+                GLfloat vertices[6][4] = {
+                    { xpos,     ypos + h,   0.0, 0.0 },            
+                    { xpos,     ypos,       0.0, 1.0 },
+                    { xpos + w, ypos,       1.0, 1.0 },
+
+                    { xpos,     ypos + h,   0.0, 0.0 },
+                    { xpos + w, ypos,       1.0, 1.0 },
+                    { xpos + w, ypos + h,   1.0, 0.0 }           
+                };
+
+                // Render glyph texture over quad
+                glBindTexture(GL_TEXTURE_2D, ch.TextureID);
+
+                // Update content of VBO memory
+                glBindBuffer(GL_ARRAY_BUFFER, gTextVBO);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); // Be sure to use glBufferSubData and not glBufferData
+
+                //glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+                // Render quad
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+                // Now advance cursors for next glyph (note that advance is number of 1/64 pixels)
+
+                x += (ch.Advance >> 6) * scale; // Bitshift by 6 to get value in pixels (2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels))
+            }
+
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+
 
         void drawCubeFaces() {
             GLuint program = gProgram[0];
@@ -252,7 +410,6 @@ class Renderer{
             glUniformMatrix4fv(viewingMatrixLoc[0], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
             glUniformMatrix4fv(projectionMatrixLoc[0], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
-            // gameElements.drawGameElementsFaces();
             glUniform3fv(kdLoc[0], 1, glm::value_ptr(kdCubes));
             for (int i = 0; i < allTetBlocks.size(); i++) {
                 allTetBlocks[i]->drawFaces();
@@ -283,6 +440,11 @@ class Renderer{
 
             drawCubeFaces();
             drawCubeEdges();
+            renderText(eyePositions[eyePositionIndex], 10, gHeight - 50, 0.75, glm::vec3(1, 1, 0));
+            renderText("Points: "+to_string(score), gWidth - 180, gHeight - 50, 0.75, glm::vec3(1, 1, 0));
+            if(gameOver) {
+                renderText("Game Over", gWidth/2 - 55, gHeight/2 - 60, 1, glm::vec3(1, 1, 0));
+            }
 
             assert(glGetError() == GL_NO_ERROR);
         }
@@ -336,7 +498,24 @@ class Renderer{
             }
             // Create a rotation matrix around the Y-axis
             eyePos = rotatePos(eyePos, a);
+            lightPos = rotatePos(lightPos, a);
+
+            for (int i = 0; i < 2; ++i) {  // Assuming the first two programs use the light position
+                glUseProgram(gProgram[i]);
+                glUniform3fv(lightPosLoc[i], 1, glm::value_ptr(lightPos));
+            }
         }
+
+        void rotateEyePos() {
+            if (isEyePosRotating && eyePosRotationStep < totalEyePosRotationSteps) {
+                eyePosUpdate(eyePosRotationDirection);
+                reshape(glfwGetCurrentContext(), gWidth, gHeight);
+                eyePosRotationStep+= 3;
+            } else {
+                isEyePosRotating = false;
+            }
+        }
+
 
         bool checkCollision(Cube::MoveDirection moveDirection) {
             Cube& currCenterCube = currTetBlock->getCenterCube();
@@ -396,7 +575,6 @@ class Renderer{
             return false;
         }
 
-
         void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods) {
             if ((key == GLFW_KEY_Q || key == GLFW_KEY_ESCAPE) && action == GLFW_PRESS) {
                 glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -424,12 +602,26 @@ class Renderer{
                 eyePosRotationStep = 0;
                 if (key == GLFW_KEY_H){
                     eyePosRotationDirection = AngleDirection::Left;
+                    eyePositionIndex = (eyePositionIndex - 1 + 4) % 4;
+                    cout << "eyePositionIndex: " << eyePositionIndex << endl;
                     stableEyePos = rotatePos(stableEyePos, (float)-totalEyePosRotationSteps);
                 }
                 else{
                     eyePosRotationDirection = AngleDirection::Right;
+                    eyePositionIndex = (eyePositionIndex + 1 + 4) % 4;
+                    cout << "eyePositionIndex: " << eyePositionIndex << endl;
                     stableEyePos = rotatePos(stableEyePos, (float)totalEyePosRotationSteps);
                 } 
+            }
+            if ((key == GLFW_KEY_W) && action == GLFW_PRESS) {
+                if (totalPlaySteps <= 100) {
+                    totalPlaySteps += 10;
+                }
+            }
+            if ((key == GLFW_KEY_S) && action == GLFW_PRESS) {
+                if (totalPlaySteps >= 20) {
+                    totalPlaySteps -= 10;
+                }
             }
         }
 
@@ -451,16 +643,6 @@ class Renderer{
                 return true;
             }
             return false;
-        }
-
-        void rotateEyePos() {
-            if (isEyePosRotating && eyePosRotationStep < totalEyePosRotationSteps) {
-                eyePosUpdate(eyePosRotationDirection);
-                reshape(glfwGetCurrentContext(), gWidth, gHeight);
-                eyePosRotationStep+= 3;
-            } else {
-                isEyePosRotating = false;
-            }
         }
 
         void gameStep(){
@@ -496,15 +678,28 @@ class Renderer{
                         }
                     }
                     if(allTrue){
+                        for(int i=0; i < 8; i++){
+                            for(int j=0; j < 8; j++){
+                                groundedPositions[i][j] = false;
+                            }
+                        }
                         cout << "allTrue" << endl;
+                        score += 243;
                         allTetBlocks.clear();
+
                     }
                 }
                 else{
                     currTetBlock->landed = false;
                     cout << "landed on block" << endl;
+                    auto position = currTetBlock->getPosition();
+                    if ((position.y + 1) >= topY) {
+                        cout << "GAME OVER" << endl;
+                        gameOver = true;
+                        return;
+                    }
                 }
-                currTetBlock = new TetBlock(glm::vec3(0, 12, 0));
+                currTetBlock = new TetBlock(glm::vec3(0, topY, 0));
                 allTetBlocks.push_back(currTetBlock);
             }
 
@@ -515,12 +710,15 @@ class Renderer{
                 if (isEyePosRotating) {
                     rotateEyePos();
                 }
-                if (playStep < totalPlaySteps) {
-                    playStep++;
-                }
-                else {
-                    gameStep();
-                    playStep = 0;
+                
+                if (!gameOver) {
+                    if (playStep < totalPlaySteps) {
+                        playStep++;
+                    }
+                    else {
+                        gameStep();
+                        playStep = 0;
+                    }                    
                 }
                 
                 display();
@@ -570,12 +768,12 @@ class Renderer{
             glfwSetWindowUserPointer(window, this);
 
             glfwSetKeyCallback(window, [](GLFWwindow* win, int key, int scancode, int action, int mods) {
-                auto* renderer = static_cast<Renderer*>(glfwGetWindowUserPointer(win));
+                auto* renderer = static_cast<Game*>(glfwGetWindowUserPointer(win));
                 renderer->keyboard(win, key, scancode, action, mods);
             });
 
             glfwSetWindowSizeCallback(window, [](GLFWwindow* win, int w, int h) {
-                auto* renderer = static_cast<Renderer*>(glfwGetWindowUserPointer(win));
+                auto* renderer = static_cast<Game*>(glfwGetWindowUserPointer(win));
                 renderer->reshape(win, w, h);
             });
 
